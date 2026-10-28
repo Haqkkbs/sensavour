@@ -131,10 +131,10 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
       setIsUnlocking(false);
       if (err?.code === 'permission-denied' || String(err).includes('permission-denied')) {
         setErrorMessage(
-          'Pelayan Firestore memerlukan sekurang-kurangnya 300 saat masa meneroka yang disahkan. Sila tunggu 5 saat lagi dan tekan butang semula.'
+          'Pelayan Firestore memerlukan sekurang-kurangnya 60 saat masa meneroka yang disahkan. Sila tunggu 5 saat lagi dan tekan butang semula.'
         );
       } else {
-        setErrorMessage('Tak dapat membuka kunci. Sila semak sambungan dan cuba lagi.');
+        setErrorMessage('Tidak dapat membuka kunci. Sila semak sambungan internet dan cuba lagi.');
       }
     }
   };
@@ -154,7 +154,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
           Teroka SENSAVOUR
         </h1>
         <p className="text-sm sm:text-base text-[#4F6660] mt-1">
-          Gunakan roda sensori di sebelah untuk mengumpul 5 kosa kata baru bagi membuka kunci pasca-ujian.
+          Gunakan roda sensori di sebelah untuk mengumpul 5 kosa kata baharu bagi membuka kunci pasca-ujian.
         </p>
       </div>
 
@@ -199,7 +199,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
               highlightCategory={activeHighlight}
             />
             <div className="mt-2 text-xs text-[#4F6660]">
-              Penuhkan 5 bahagian ({completedWordsCount}/5) & teroka sekurang-kurangnya 5 minit.
+              Penuhkan 5 bahagian ({completedWordsCount}/5) & teroka sekurang-kurangnya 1 minit.
             </div>
           </div>
 
@@ -211,7 +211,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                 <div>
                   <h4 className="font-bold text-[#12302B] text-base">Bersedia Meneroka?</h4>
                   <p className="text-xs sm:text-sm text-[#4F6660] mt-1">
-                    Pemasa 5 minit akan bermula sebaik sahaja anda menekan butang di bawah.
+                    Pemasa 1 minit akan bermula sebaik sahaja anda menekan butang di bawah.
                   </p>
                 </div>
               </div>
@@ -257,8 +257,16 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
 
               {/* Word Missions */}
               <div className="space-y-3 pt-2">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#4F6660]">
-                  5 Misi Perkataan Sensori:
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#4F6660]">
+                    5 Misi Perkataan Sensori:
+                  </div>
+                  <span className="text-[11px] text-[#1F7A57] font-semibold">1 minit & 5 kata</span>
+                </div>
+
+                {/* Malaysian Sensory Vocabulary Note */}
+                <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
+                  <span className="font-bold">💡 Tip Kosa Kata Malaysia:</span> Sekiranya anda menjumpai perkataan seperti <span className="font-bold text-[#C8402B]">"gurih"</span> dalam laman SENSAVOUR, gunakan perkataan Bahasa Melayu Malaysia yang setara seperti <span className="font-bold">"berlemak"</span>, <span className="font-bold">"lazat"</span>, <span className="font-bold">"enak"</span> atau <span className="font-bold">"masin-lemak"</span>.
                 </div>
 
                 {SENSORY_CATEGORIES.map(cat => {
@@ -283,7 +291,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                       <input
                         type="text"
                         maxLength={40}
-                        placeholder="Cth kosa kata yang anda temui..."
+                        placeholder="Cth: kosa kata yang anda temui..."
                         value={val}
                         onChange={e => handleWordChange(cat.key, e.target.value)}
                         className="w-full px-3 py-1.5 text-xs sm:text-sm bg-white border border-[#CBD7CE] rounded-lg text-[#12302B] focus:outline-none focus:ring-2 focus:ring-[#C8402B]"
@@ -300,7 +308,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                     {!isWordsMet
                       ? `Perlu ${5 - completedWordsCount} perkataan lagi`
                       : !isTimeMet
-                      ? `Tunggu lagi ${formatMinutesSeconds(remainingSeconds)}`
+                      ? `Sila tunggu ${formatMinutesSeconds(remainingSeconds)} lagi`
                       : '✓ Syarat buka kunci dipenuhi!'}
                   </span>
                   {saveStatus && (
@@ -339,7 +347,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      Pasca-Ujian Terkunci (5 minit & 5 kata)
+                      Pasca-Ujian Terkunci (1 minit & 5 kata)
                     </>
                   )}
                 </button>

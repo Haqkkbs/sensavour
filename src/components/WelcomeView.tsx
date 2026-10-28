@@ -9,11 +9,13 @@ import {
   ExternalLink,
   RefreshCw,
   LogIn,
-  CheckCircle2
+  CheckCircle2,
+  Hash,
+  Sparkles
 } from 'lucide-react';
 
 interface WelcomeViewProps {
-  onStartMission: (code: string) => Promise<void>;
+  onStartMission: (customCode?: string) => Promise<void>;
   onOpenAdmin: () => void;
   isAnonymousDisabled?: boolean;
   onRetryAnonymous?: () => Promise<void>;
@@ -29,7 +31,6 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   onSignInGoogle,
   currentUser
 }) => {
-  const [code, setCode] = useState<string>('');
   const [consent, setConsent] = useState<'yes' | 'no' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -38,12 +39,6 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanCode = code.trim().toUpperCase();
-
-    if (!/^S\d{3}$/.test(cleanCode)) {
-      setErrorMessage('Sila masukkan kod peserta yang sah dalam format S001 (contoh: S001).');
-      return;
-    }
 
     if (!consent) {
       setErrorMessage('Sila pilih sama ada anda bersetuju atau tidak untuk menyertai kajian.');
@@ -58,12 +53,12 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
     setIsLoading(true);
     setErrorMessage('');
     try {
-      await onStartMission(cleanCode);
+      await onStartMission();
     } catch (err: any) {
       console.error(err);
       setIsLoading(false);
       setErrorMessage(
-        err.message || 'Tak dapat menyimpan rekod permulaan. Sila semak internet dan cuba lagi.'
+        err.message || 'Tidak dapat menjana sesi peserta. Sila semak sambungan internet dan cuba lagi.'
       );
     }
   };
@@ -155,7 +150,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
               type="button"
               onClick={handleRetry}
               disabled={isRetryingAuth}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700 text-white font-bold text-xs hover:bg-amber-800 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700 text-white font-bold text-xs hover:bg-amber-800 transition cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRetryingAuth ? 'animate-spin' : ''}`} />
               Semak Semula Sambungan
@@ -165,7 +160,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
               <button
                 type="button"
                 onClick={onSignInGoogle}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-700 text-amber-900 font-bold text-xs bg-white hover:bg-amber-100/50 transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-700 text-amber-900 font-bold text-xs bg-white hover:bg-amber-100/50 transition cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 Atau Terus Log Masuk dengan Google
@@ -186,25 +181,21 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Code Input */}
-        <div>
-          <label htmlFor="participant-code" className="block text-xs font-bold uppercase tracking-wider text-[#12302B] mb-1.5">
-            Kod Peserta / Participant Code:
-          </label>
-          <input
-            id="participant-code"
-            type="text"
-            maxLength={4}
-            placeholder="S001"
-            value={code}
-            onChange={e => {
-              setCode(e.target.value.toUpperCase());
-              setErrorMessage('');
-            }}
-            className="w-44 px-3.5 py-2.5 bg-white border border-[#CBD7CE] rounded-xl font-mono font-bold text-lg text-[#12302B] tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-[#C8402B]"
-          />
-          <p className="text-xs text-[#4F6660] mt-1.5">
-            Gunakan kod yang diberikan oleh penyelidik (contoh: S001). Jangan masukkan nama atau nombor kad pengenalan/matrik.
+        {/* Automatic Running Number Notification Card */}
+        <div className="p-4 bg-[#EDF1EA]/80 border border-[#CBD7CE] rounded-xl space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#12302B]">
+              <Hash className="w-4 h-4 text-[#C8402B]" />
+              Kod Peserta (Nombor Giliran Automatik)
+            </div>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#1F7A57]/15 text-[#1F7A57]">
+              <Sparkles className="w-3 h-3" />
+              Auto Running Number
+            </span>
+          </div>
+
+          <p className="text-xs text-[#4F6660] leading-relaxed">
+            Peserta <b>tidak perlu memasukkan nombor secara manual</b>. Sistem pelayan akan menetapkan nombor giliran anda secara automatik berturutan (contoh: <span className="font-mono font-bold text-[#12302B]">S001, S002, S003...</span>) sebaik sahaja anda memulakan misi.
           </p>
         </div>
 
@@ -276,17 +267,17 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 rounded-xl bg-[#C8402B] text-white font-bold text-sm shadow hover:bg-[#b03522] transition disabled:opacity-50 cursor-pointer"
+          className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-5 rounded-xl bg-[#C8402B] text-white font-bold text-sm sm:text-base shadow hover:bg-[#b03522] transition disabled:opacity-50 cursor-pointer"
         >
           {isLoading ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Menyediakan Sesi…
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Menjana Nombor Giliran & Sesi…
             </>
           ) : (
             <>
-              Mula Misi
-              <ArrowRight className="w-4 h-4" />
+              Mula Misi Sekarang
+              <ArrowRight className="w-5 h-5" />
             </>
           )}
         </button>

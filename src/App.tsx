@@ -18,7 +18,8 @@ import {
   auth,
   testConnection,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  getNextParticipantCode
 } from './firebase';
 import {
   ParticipantRecord,
@@ -172,8 +173,8 @@ export default function App() {
     return Math.min(100, pts);
   };
 
-  // Handler: Start participant session with code & consent
-  const handleStartMission = async (code: string) => {
+  // Handler: Start participant session with automatic running number or manual code
+  const handleStartMission = async (customCode?: string) => {
     let targetUid = authUid || auth.currentUser?.uid;
     if (!targetUid) {
       try {
@@ -193,6 +194,11 @@ export default function App() {
         throw err;
       }
     }
+
+    // Determine the participant code: if not specified manually, auto-generate sequential running number!
+    const code = (customCode && customCode.trim())
+      ? customCode.trim().toUpperCase()
+      : await getNextParticipantCode();
 
     const docPath = `participants/${targetUid}`;
     try {
@@ -486,12 +492,27 @@ export default function App() {
         ) : currentStage === 'pre' ? (
           showWizardIntro ? (
             <div className="max-w-xl mx-auto w-full bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
-              <div className="text-xs font-bold uppercase tracking-wider text-[#C8402B]">
-                Langkah 1 / Step 1
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#C8402B]">
+                  Langkah 1 / Step 1
+                </span>
+                {participant?.code && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#12302B] text-white font-mono text-xs font-bold shadow-xs">
+                    Kod: {participant.code}
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-[#12302B]">
                 Pra-Ujian Penilaian Makanan
               </h1>
+              {participant?.code && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+                  <span>Nombor giliran anda telah didaftarkan:</span>
+                  <span className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-emerald-300">
+                    {participant.code}
+                  </span>
+                </div>
+              )}
               <p className="text-sm text-[#4F6660] leading-relaxed">
                 Jawab soalan ini <b>sebelum</b> anda membuka atau meneroka SENSAVOUR.
                 Jawapan yang dihantar tidak boleh diubah selepas dihantar, jadi jawab
@@ -542,8 +563,7 @@ export default function App() {
                 mengaplikasikan kosa kata sensori yang telah anda temui.
               </p>
               <div className="p-3.5 bg-[#EDF1EA]/70 border-l-4 border-[#1F7A57] rounded-r-xl text-xs sm:text-sm text-[#4F6660]">
-                Selepas menghuraikan 10 makanan, anda akan menjawab soalan refleksi ringkas
-                mengenai keberkesanan roda sensori SENSAVOUR.
+                Anda hanya perlu menghuraikan semula makanan yang pernah anda rasa (makanan belum pernah dirasai dilangkau secara automatik), diikuti soalan refleksi ringkas.
               </div>
               <button
                 type="button"
@@ -559,6 +579,7 @@ export default function App() {
               kind="post"
               questions={POST_QUESTIONS}
               participantUid={authUid || ''}
+              foodFamiliarity={participant?.profile?.q8}
               onSubmit={handleSubmitPost}
             />
           )

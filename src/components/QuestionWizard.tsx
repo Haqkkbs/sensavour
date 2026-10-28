@@ -1,20 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { QuestionDef } from '../types';
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  QuestionDef,
+  FOODS,
+  FOOD_DETAILS,
+  hasTastedFood
+} from '../types';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  Utensils,
+  Sparkles,
+  Info
+} from 'lucide-react';
 
 interface QuestionWizardProps {
   title: string;
   kind: 'pre' | 'post';
   questions: QuestionDef[];
   participantUid: string;
+  foodFamiliarity?: Record<string, string>;
   onSubmit: (answers: Record<string, any>) => Promise<void>;
   onCancel?: () => void;
+}
+
+function getFoodForQuestion(q: QuestionDef): string | null {
+  for (const food of FOODS) {
+    if (q.id.toLowerCase().includes(food.toLowerCase()) || q.bm.includes(food)) {
+      return food;
+    }
+  }
+  return null;
 }
 
 export const QuestionWizard: React.FC<QuestionWizardProps> = ({
   kind,
   questions,
   participantUid,
+  foodFamiliarity,
   onSubmit
 }) => {
   const draftKey = `sensavour_draft_${kind}_${participantUid}`;
@@ -42,9 +66,32 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
     }
   }, [answers, draftKey]);
 
-  const currentQ = questions[currentIndex];
-  const total = questions.length;
-  const isLast = currentIndex === total - 1;
+  // Determine active familiarity mapping (from current answers.q8 or passed from profile)
+  const activeFamiliarity = answers.q8 || foodFamiliarity || {};
+
+  // Smart Conditional Skip: Filter out food questions if the participant has NEVER tasted the food!
+  const activeQuestions = useMemo(() => {
+    return questions.filter(q => {
+      const food = getFoodForQuestion(q);
+      if (!food) return true; // Non-food questions (Q3-Q8, Q31-Q36)
+      const famAnswer = activeFamiliarity[food];
+      // If familiarity not yet filled (e.g. before Q8), keep in list
+      if (!famAnswer) return true;
+      // If familiarity was answered, only include if user has tasted it!
+      return hasTastedFood(famAnswer);
+    });
+  }, [questions, activeFamiliarity]);
+
+  // Guard index bounds if activeQuestions length decreases after answering Q8
+  const safeIndex = Math.min(currentIndex, Math.max(0, activeQuestions.length - 1));
+  const currentQ = activeQuestions[safeIndex] || questions[0];
+  const total = activeQuestions.length;
+  const isLast = safeIndex === total - 1;
+
+  // Count how many foods were tasted vs skipped
+  const tastedCount = useMemo(() => {
+    return FOODS.filter(f => hasTastedFood(activeFamiliarity[f])).length;
+  }, [activeFamiliarity]);
 
   function isAnswered(q: QuestionDef): boolean {
     const val = answers[q.id];
@@ -104,7 +151,7 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
       if (currentQ.type === 'grid') {
         setErrorMessage('Sila pilih jawapan bagi setiap makanan di bawah.');
       } else if (currentQ.type === 'para') {
-        setErrorMessage('Sila tulis sekurang-kurangnya beberapa perkataan. Jika belum pasti, nyatakan begitu.');
+        setErrorMessage('Sila tulis sekurang-kurangnya beberapa perkataan mengenai ciri makanan ini.');
       } else {
         setErrorMessage('Sila pilih satu jawapan untuk meneruskan.');
       }
@@ -122,18 +169,45 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      // Process answers to flatten any __other__ values
       const processed: Record<string, any> = {};
+
+      // Process all original questions
       questions.forEach(q => {
+        const food = getFoodForQuestion(q);
+        const famAnswer = activeFamiliarity[food || ''];
+
+        // If it is a food question and user NEVER tasted it, auto-fill default
+        if (food && famAnswer && !hasTastedFood(famAnswer)) {
+          processed[q.id] = 'Belum pernah merasai';
+          return;
+        }
+
         const v = answers[q.id];
         if (q.type === 'radio' && v === '__other__') {
           processed[q.id] = `Other: ${(answers[`${q.id}_other`] || '').trim()}`;
         } else if (typeof v === 'string') {
           processed[q.id] = v.trim();
         } else {
-          processed[q.id] = v;
+          processed[q.id] = v || (food ? 'Belum pernah merasai' : '');
         }
       });
+
+      // Also ensure all 10 food keys exist in processed
+      if (kind === 'pre') {
+        FOODS.forEach((f, i) => {
+          const qId = `q${9 + i}`;
+          if (!processed[qId]) {
+            processed[qId] = answers[qId] || 'Belum pernah merasai';
+          }
+        });
+      } else {
+        FOODS.forEach((f, i) => {
+          const qId = `q${21 + i}`;
+          if (!processed[qId]) {
+            processed[qId] = answers[qId] || 'Belum pernah merasai';
+          }
+        });
+      }
 
       await onSubmit(processed);
       try {
@@ -143,13 +217,13 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
       console.error(err);
       setIsSubmitting(false);
       setErrorMessage(
-        'Tak dapat menghantar jawapan ke pelayan. Sila semak sambungan internet dan cuba lagi. Jawapan anda masih tersimpan di peranti ini.'
+        'Tidak dapat menghantar jawapan ke pelayan. Sila semak sambungan internet dan cuba lagi. Jawapan anda masih tersimpan di peranti ini.'
       );
     }
   }
 
   function handleBack() {
-    if (currentIndex > 0) {
+    if (safeIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       setErrorMessage('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -157,7 +231,11 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
   }
 
   const qNumber = currentQ.id.replace('q', 'Q');
-  const progressPercent = Math.round(((currentIndex + 1) / total) * 100);
+  const progressPercent = Math.round(((safeIndex + 1) / total) * 100);
+
+  // Check if current question is about a specific food
+  const currentFood = getFoodForQuestion(currentQ);
+  const currentFoodDetail = currentFood ? FOOD_DETAILS[currentFood] : null;
 
   return (
     <div className="max-w-2xl mx-auto w-full bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-6 sm:p-8 shadow-sm">
@@ -168,7 +246,7 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
             {kind === 'pre' ? 'Langkah 1: Pra-Ujian' : 'Langkah 3: Pasca-Ujian & Refleksi'}
           </span>
           <span>
-            {currentIndex + 1} / {total} ({progressPercent}%)
+            Soalan {safeIndex + 1} / {total} ({progressPercent}%)
           </span>
         </div>
         <div className="w-full bg-[#DDE6DE] h-2 rounded-full overflow-hidden">
@@ -178,6 +256,19 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
           />
         </div>
       </div>
+
+      {/* Smart Skip Notification Banner (if some foods were auto-skipped) */}
+      {currentFood && (
+        <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            Langkau Pintar Aktif: Anda hanya menjawab {tastedCount} makanan yang pernah dirasai.
+          </span>
+          <span className="font-bold text-[11px] bg-white px-2 py-0.5 rounded border border-emerald-300">
+            {tastedCount}/10 Makanan
+          </span>
+        </div>
+      )}
 
       {/* Question Header */}
       <div className="mb-6">
@@ -197,6 +288,36 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Food Picture Card (When Question is about a specific Borneo Dish) */}
+      {currentFoodDetail && (
+        <div className="mb-6 rounded-2xl overflow-hidden border border-[#CBD7CE] bg-[#EDF1EA]/50 shadow-xs">
+          <div className="relative w-full h-48 sm:h-64 bg-[#12302B]/10 overflow-hidden">
+            <img
+              src={currentFoodDetail.image}
+              alt={currentFoodDetail.name}
+              className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+              loading="eager"
+              onError={e => {
+                const target = e.currentTarget;
+                if (target.src !== currentFoodDetail.fallbackImage) {
+                  target.src = currentFoodDetail.fallbackImage;
+                }
+              }}
+            />
+            <div className="absolute top-3 left-3 bg-[#12302B]/85 text-white backdrop-blur-xs text-xs font-bold px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+              <span>📍 {currentFoodDetail.origin}</span>
+            </div>
+            <div className="absolute bottom-3 right-3 bg-white/90 text-[#12302B] backdrop-blur-xs text-[11px] font-bold px-2.5 py-1 rounded-md shadow-xs">
+              {currentFoodDetail.name}
+            </div>
+          </div>
+          <div className="p-3.5 text-xs text-[#4F6660] leading-relaxed border-t border-[#CBD7CE]/70">
+            <span className="font-bold text-[#12302B]">Bahan & Ciri Masakan: </span>
+            {currentFoodDetail.description}
+          </div>
+        </div>
+      )}
 
       {/* Question Input Fields */}
       <div className="mb-8">
@@ -243,12 +364,14 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
                     onChange={() => handleRadioChange('__other__')}
                     className="w-4 h-4 text-[#C8402B] accent-[#C8402B]"
                   />
-                  <span className="text-sm text-[#12302B]">Other / Lain-lain (Nyatakan):</span>
+                  <span className="text-sm text-[#12302B]">
+                    Program pengajian lain / Other programme (Sila nyatakan bidang):
+                  </span>
                 </div>
                 <input
                   type="text"
                   maxLength={100}
-                  placeholder="Taip program pengajian anda..."
+                  placeholder="Cth: Pengurusan Perniagaan, Kejuruteraan, Teknologi Maklumat, dsb."
                   value={answers[`${currentQ.id}_other`] || ''}
                   onChange={e => handleOtherTextChange(e.target.value)}
                   onFocus={() => handleRadioChange('__other__')}
@@ -261,22 +384,56 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
 
         {currentQ.type === 'grid' && (
           <div className="space-y-4 divide-y divide-[#CBD7CE]/70">
+            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <span>
+                <b>Tip Langkau Pintar:</b> Selepas soalan ini, anda <b>hanya perlu menghuraikan makanan yang anda pernah makan/rasa</b>. Makanan yang belum pernah dirasai akan dilangkau secara automatik!
+              </span>
+            </div>
+
             {currentQ.rows?.map((rowFood, rIdx) => {
               const currentVal = answers[currentQ.id]?.[rowFood] || '';
+              const foodMeta = FOOD_DETAILS[rowFood];
               return (
                 <div key={rIdx} className="pt-3.5 first:pt-0">
-                  <div className="font-display font-bold text-base text-[#12302B] mb-1.5 flex items-center justify-between">
-                    <span>{rowFood}</span>
-                    {currentVal && (
-                      <CheckCircle2 className="w-4 h-4 text-[#1F7A57]" />
+                  <div className="flex items-center gap-3 mb-2">
+                    {foodMeta && (
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#CBD7CE] bg-gray-100 shrink-0">
+                        <img
+                          src={foodMeta.image}
+                          alt={rowFood}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={e => {
+                            const target = e.currentTarget;
+                            if (target.src !== foodMeta.fallbackImage) {
+                              target.src = foodMeta.fallbackImage;
+                            }
+                          }}
+                        />
+                      </div>
                     )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-bold text-base text-[#12302B] flex items-center justify-between">
+                        <span>{rowFood}</span>
+                        {currentVal && (
+                          <CheckCircle2 className="w-4 h-4 text-[#1F7A57] shrink-0" />
+                        )}
+                      </div>
+                      {foodMeta && (
+                        <div className="text-[11px] text-[#4F6660] truncate">
+                          {foodMeta.origin} · {foodMeta.description}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
                   <select
                     value={currentVal}
                     onChange={e => handleGridChange(rowFood, e.target.value)}
                     className="w-full text-xs sm:text-sm bg-white border border-[#CBD7CE] rounded-lg p-2.5 text-[#12302B] focus:outline-none focus:ring-2 focus:ring-[#C8402B]"
                   >
-                    <option value="">Pilih tahap keakraban / Select familiarity level…</option>
+                    <option value="">Pilih tahap kebiasaan / Select familiarity level…</option>
                     {currentQ.opts?.map((opt, oIdx) => (
                       <option key={oIdx} value={opt}>
                         {opt}
@@ -300,7 +457,7 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
               className="w-full p-3.5 text-sm sm:text-base bg-white border border-[#CBD7CE] rounded-xl text-[#12302B] focus:outline-none focus:ring-2 focus:ring-[#C8402B] resize-y placeholder:text-gray-400"
             />
             <div className="flex justify-between items-center text-xs text-[#4F6660]">
-              <span>Karakter: {(answers[currentQ.id] || '').length} / 1500</span>
+              <span>Aksara: {(answers[currentQ.id] || '').length} / 1500</span>
               <span>{answers[currentQ.id]?.trim() ? '✓ Disimpan setempat' : ''}</span>
             </div>
           </div>
@@ -319,8 +476,8 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
         <button
           type="button"
           onClick={handleBack}
-          disabled={currentIndex === 0 || isSubmitting}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#CBD7CE] font-bold text-sm text-[#12302B] hover:bg-[#EDF1EA] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          disabled={safeIndex === 0 || isSubmitting}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#CBD7CE] font-bold text-sm text-[#12302B] hover:bg-[#EDF1EA] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Kembali
@@ -330,7 +487,7 @@ export const QuestionWizard: React.FC<QuestionWizardProps> = ({
           type="button"
           onClick={handleNext}
           disabled={isSubmitting}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#C8402B] text-white font-bold text-sm shadow hover:bg-[#b03522] disabled:opacity-50 disabled:cursor-not-allowed transition"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#C8402B] text-white font-bold text-sm shadow hover:bg-[#b03522] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
         >
           {isSubmitting ? (
             <>

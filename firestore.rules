@@ -3,6 +3,7 @@ rules_version = '2';
 // Peraturan keselamatan Misi SENSAVOUR.
 // Penyelidik admin: mhaq1980@gmail.com
 // Gate masa meneroka: 300 saat (5 minit) dan 5 perkataan kosa kata sensori.
+// Sokongan running number berterusan (S001, S002, S003...).
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,19 +12,53 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function isSuperAdmin() {
       return signedIn()
         && request.auth.token.email_verified == true
         && request.auth.token.email in ['mhaq1980@gmail.com'];
     }
 
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.token.email in ['mhaq1980@gmail.com']
+          || exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+        );
+    }
+
     function isValidCode(code) {
-      return code is string && code.size() <= 8 && code.matches('^S[0-9]{3}$');
+      return code is string && code.size() <= 10 && code.matches('^S[0-9]{3,}$');
     }
 
     // Default deny catch-all
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Pengurusan email penyelidik berdaftar
+    match /admins/{adminEmail} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Kaunter giliran automatik untuk peserta
+    match /counters/{counterId} {
+      allow get: if signedIn() || isAdmin();
+
+      allow create: if (signedIn() || isAdmin())
+        && counterId == 'participants'
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0;
+
+      allow update: if (signedIn() || isAdmin())
+        && counterId == 'participants'
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && (isAdmin() || request.resource.data.count == resource.data.count + 1);
+
+      allow delete: if isAdmin();
     }
 
     match /participants/{uid} {
@@ -70,12 +105,12 @@ service cloud.firestore {
         && (!('words' in resource.data) || !('unlockedAt' in resource.data)
             || request.resource.data.words == resource.data.words)
 
-        // Buka kunci: disahkan oleh pelayan (>= 300s penerokaan dan >= 5 perkataan)
+        // Buka kunci: disahkan oleh pelayan (>= 60s penerokaan dan >= 5 perkataan)
         && (!('unlockedAt' in request.resource.data)
             || ('unlockedAt' in resource.data)
             || (request.resource.data.unlockedAt == request.time
                 && 'exploreStartedAt' in resource.data
-                && request.time >= resource.data.exploreStartedAt + duration.value(300, 's')
+                && request.time >= resource.data.exploreStartedAt + duration.value(60, 's')
                 && 'words' in request.resource.data
                 && request.resource.data.words.keys().size() >= 5))
 
@@ -90,7 +125,7 @@ service cloud.firestore {
                 && 'post' in request.resource.data
                 && 'reflection' in request.resource.data));
 
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       function setOnce(field) {
         return !(field in resource.data)

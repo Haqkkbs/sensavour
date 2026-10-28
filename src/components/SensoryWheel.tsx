@@ -116,7 +116,7 @@ export const SensoryWheel: React.FC<SensoryWheelProps> = ({ words, points, highl
           textAnchor="middle"
           className="text-[9px] font-bold tracking-widest uppercase fill-[#4F6660]"
         >
-          DARI 100 MATA
+          DARIPADA 100 MATA
         </text>
       </svg>
     </div>

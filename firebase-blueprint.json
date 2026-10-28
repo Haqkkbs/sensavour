@@ -2,14 +2,14 @@
   "entities": {
     "Participant": {
       "title": "Participant",
-      "description": "Kajian peserta Misi SENSAVOUR: kod, persetujuan, pra-ujian, perkataan sensori teroka, dan pasca-ujian.",
+      "description": "Kajian peserta Misi SENSAVOUR: kod running number, persetujuan, pra-ujian, perkataan sensori teroka, dan pasca-ujian.",
       "type": "object",
       "properties": {
         "code": {
           "type": "string",
-          "description": "Kod peserta contoh S001",
-          "pattern": "^S[0-9]{3}$",
-          "maxLength": 8
+          "description": "Kod peserta dijana secara automatik (contoh S001, S002)",
+          "pattern": "^S[0-9]{3,}$",
+          "maxLength": 10
         },
         "consentAt": {
           "type": "string",
@@ -68,12 +68,54 @@
         }
       },
       "required": ["code", "consentAt", "createdAt", "stage"]
+    },
+    "Counter": {
+      "title": "Counter",
+      "description": "Penjejak nombor giliran automatik bagi peserta (running number)",
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Nilai giliran semasa"
+        }
+      },
+      "required": ["count"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Senarai email penyelidik yang dibenarkan mengakses portal pentadbir",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Alamat email penyelidik"
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa email didaftarkan"
+        },
+        "addedBy": {
+          "type": "string",
+          "description": "Email penyelidik yang menambah"
+        }
+      },
+      "required": ["email", "addedAt"]
     }
   },
   "firestore": {
     "/participants/{participantId}": {
       "schema": "Participant",
       "description": "Koleksi peserta kajian SENSAVOUR"
+    },
+    "/counters/{counterId}": {
+      "schema": "Counter",
+      "description": "Kaunter atomik untuk running number"
+    },
+    "/admins/{adminEmail}": {
+      "schema": "Admin",
+      "description": "Koleksi email penyelidik yang dibenarkan mengakses portal"
     }
   }
 }
