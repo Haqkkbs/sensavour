@@ -1,0 +1,93 @@
+rules_version = '2';
+
+// Peraturan keselamatan Misi SENSAVOUR.
+// 1) GANTI emel admin di bawah dengan emel Google penyelidik (huruf kecil).
+// 2) Nilai 300 (saat) mesti sama dengan MIN_EXPLORE_SECONDS dalam firebase-config.js.
+// Tampal fail ini dalam Firebase Console > Firestore Database > Rules > Publish.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['GANTI_EMEL_ADMIN@contoh.com'];
+    }
+
+    match /participants/{uid} {
+
+      // Peserta hanya boleh baca dokumen sendiri (untuk sambung semula). Admin boleh baca semua.
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow get, list: if isAdmin();
+
+      // Cipta: hanya dokumen sendiri, hanya medan permulaan, cap masa dari pelayan.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['code', 'consentAt', 'createdAt', 'stage'])
+        && request.resource.data.code is string
+        && request.resource.data.code.matches('^S[0-9]{3}$')
+        && request.resource.data.consentAt == request.time
+        && request.resource.data.createdAt == request.time;
+
+      // Kemas kini: dikawal langkah demi langkah.
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+             'code', 'consentAt', 'createdAt', 'stage',
+             'profile', 'pre', 'preSubmittedAt',
+             'exploreStartedAt', 'words', 'unlockedAt',
+             'post', 'reflection', 'postSubmittedAt'])
+        && request.resource.data.code == resource.data.code
+
+        // Medan "set sekali": jika sudah ada, tidak boleh diubah.
+        && setOnce('consentAt') && setOnce('createdAt')
+        && setOnce('profile') && setOnce('pre') && setOnce('preSubmittedAt')
+        && setOnce('exploreStartedAt') && setOnce('unlockedAt')
+        && setOnce('post') && setOnce('reflection') && setOnce('postSubmittedAt')
+
+        // Pra-ujian dihantar: cap masa pelayan, profil dan jawapan hadir bersama.
+        && (!('preSubmittedAt' in request.resource.data)
+            || ('preSubmittedAt' in resource.data)
+            || (request.resource.data.preSubmittedAt == request.time
+                && 'pre' in request.resource.data && 'profile' in request.resource.data))
+
+        // Mula meneroka: hanya selepas pra-ujian.
+        && (!('exploreStartedAt' in request.resource.data)
+            || ('exploreStartedAt' in resource.data)
+            || (request.resource.data.exploreStartedAt == request.time
+                && 'preSubmittedAt' in resource.data))
+
+        // Perkataan misi: tidak boleh diubah selepas kunci dibuka.
+        && (!('words' in resource.data) || !('unlockedAt' in resource.data)
+            || request.resource.data.words == resource.data.words)
+
+        // Buka kunci: pelayan sahkan masa meneroka >= 300 saat dan 5 perkataan.
+        && (!('unlockedAt' in request.resource.data)
+            || ('unlockedAt' in resource.data)
+            || (request.resource.data.unlockedAt == request.time
+                && 'exploreStartedAt' in resource.data
+                && request.time >= resource.data.exploreStartedAt + duration.value(300, 's')
+                && 'words' in request.resource.data
+                && request.resource.data.words.keys().size() >= 5))
+
+        // Pasca-ujian hanya boleh dihantar selepas kunci dibuka.
+        && (!('post' in request.resource.data)
+            || ('post' in resource.data)
+            || 'unlockedAt' in resource.data)
+        && (!('postSubmittedAt' in request.resource.data)
+            || ('postSubmittedAt' in resource.data)
+            || (request.resource.data.postSubmittedAt == request.time
+                && 'unlockedAt' in resource.data
+                && 'post' in request.resource.data
+                && 'reflection' in request.resource.data));
+
+      allow delete: if false;
+
+      // Jika medan sudah wujud dalam dokumen lama, ia mesti kekal sama.
+      function setOnce(f) {
+        return !(f in resource.data)
+          || (f in request.resource.data && request.resource.data[f] == resource.data[f]);
+      }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+rules_version = '2';
+
+// Peraturan keselamatan Misi SENSAVOUR.
+// Penyelidik admin: mhaq1980@gmail.com
+// Gate masa meneroka: 300 saat (5 minit) dan 5 perkataan kosa kata sensori.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['mhaq1980@gmail.com'];
+    }
+
+    function isValidCode(code) {
+      return code is string && code.size() <= 8 && code.matches('^S[0-9]{3}$');
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /participants/{uid} {
+      // Peserta hanya boleh baca rekod sendiri. Admin boleh baca & list semua untuk analisa dan eksport CSV.
+      allow get: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow list: if isAdmin();
+
+      // Cipta: hanya rekod sendiri, kod sah, cap masa pelayan
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['code', 'consentAt', 'createdAt', 'stage'])
+        && isValidCode(request.resource.data.code)
+        && request.resource.data.stage == 'pre'
+        && request.resource.data.consentAt == request.time
+        && request.resource.data.createdAt == request.time;
+
+      // Kemas kini terkawal langkah demi langkah
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+             'code', 'consentAt', 'createdAt', 'stage',
+             'profile', 'pre', 'preSubmittedAt',
+             'exploreStartedAt', 'words', 'unlockedAt',
+             'post', 'reflection', 'postSubmittedAt'])
+        && request.resource.data.code == resource.data.code
+
+        // Kekalkan medan yang telah ditetapkan (tidak boleh tulis ganti)
+        && setOnce('consentAt') && setOnce('createdAt')
+        && setOnce('profile') && setOnce('pre') && setOnce('preSubmittedAt')
+        && setOnce('exploreStartedAt') && setOnce('unlockedAt')
+        && setOnce('post') && setOnce('reflection') && setOnce('postSubmittedAt')
+
+        // Pra-ujian dihantar: cap masa pelayan dan profil & pra-ujian disertakan
+        && (!('preSubmittedAt' in request.resource.data)
+            || ('preSubmittedAt' in resource.data)
+            || (request.resource.data.preSubmittedAt == request.time
+                && 'pre' in request.resource.data && 'profile' in request.resource.data))
+
+        // Mula meneroka: hanya sah selepas pra-ujian dihantar
+        && (!('exploreStartedAt' in request.resource.data)
+            || ('exploreStartedAt' in resource.data)
+            || (request.resource.data.exploreStartedAt == request.time
+                && 'preSubmittedAt' in resource.data))
+
+        // Perkataan misi: tidak boleh diubah selepas kunci pasca dibuka
+        && (!('words' in resource.data) || !('unlockedAt' in resource.data)
+            || request.resource.data.words == resource.data.words)
+
+        // Buka kunci: disahkan oleh pelayan (>= 300s penerokaan dan >= 5 perkataan)
+        && (!('unlockedAt' in request.resource.data)
+            || ('unlockedAt' in resource.data)
+            || (request.resource.data.unlockedAt == request.time
+                && 'exploreStartedAt' in resource.data
+                && request.time >= resource.data.exploreStartedAt + duration.value(300, 's')
+                && 'words' in request.resource.data
+                && request.resource.data.words.keys().size() >= 5))
+
+        // Pasca-ujian & refleksi: hanya boleh dihantar selepas kunci dibuka
+        && (!('post' in request.resource.data)
+            || ('post' in resource.data)
+            || 'unlockedAt' in resource.data)
+        && (!('postSubmittedAt' in request.resource.data)
+            || ('postSubmittedAt' in resource.data)
+            || (request.resource.data.postSubmittedAt == request.time
+                && 'unlockedAt' in resource.data
+                && 'post' in request.resource.data
+                && 'reflection' in request.resource.data));
+
+      allow delete: if false;
+
+      function setOnce(field) {
+        return !(field in resource.data)
+          || (field in request.resource.data && request.resource.data[field] == resource.data[field]);
+      }
+    }
+  }
+}

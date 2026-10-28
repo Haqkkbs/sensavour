@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Participant": {
+      "title": "Participant",
+      "description": "Kajian peserta Misi SENSAVOUR: kod, persetujuan, pra-ujian, perkataan sensori teroka, dan pasca-ujian.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Kod peserta contoh S001",
+          "pattern": "^S[0-9]{3}$",
+          "maxLength": 8
+        },
+        "consentAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa persetujuan peserta"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa mula penyertaan"
+        },
+        "stage": {
+          "type": "string",
+          "description": "Peringkat semasa (pre, explore, post, done)",
+          "enum": ["pre", "explore", "post", "done"]
+        },
+        "profile": {
+          "type": "object",
+          "description": "Demografi dan keakraban awal makanan Q3-Q8"
+        },
+        "pre": {
+          "type": "object",
+          "description": "Jawapan pra-ujian huraian makanan Q9-Q18"
+        },
+        "preSubmittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa penghantaran pra-ujian"
+        },
+        "exploreStartedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa mula penerokaan SENSAVOUR"
+        },
+        "words": {
+          "type": "object",
+          "description": "5 perkataan kosa kata sensori (rupa, aroma, rasa, tekstur, bunyi)"
+        },
+        "unlockedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa pembukaan kunci pasca-ujian selepas 5 minit & 5 perkataan"
+        },
+        "post": {
+          "type": "object",
+          "description": "Jawapan pasca-ujian huraian makanan Q21-Q30"
+        },
+        "reflection": {
+          "type": "object",
+          "description": "Refleksi penggunaan SENSAVOUR Q31-Q36"
+        },
+        "postSubmittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa penghantaran pasca-ujian"
+        }
+      },
+      "required": ["code", "consentAt", "createdAt", "stage"]
+    }
+  },
+  "firestore": {
+    "/participants/{participantId}": {
+      "schema": "Participant",
+      "description": "Koleksi peserta kajian SENSAVOUR"
+    }
+  }
+}

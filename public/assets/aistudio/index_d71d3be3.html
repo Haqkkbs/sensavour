@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Misi SENSAVOUR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #EDF1EA; --surface: #F9FBF7; --fg: #12302B; --muted: #4F6660; --line: #CBD7CE; --track: #DDE6DE;
+  --accent: #C8402B; --accent-fg: #FFFFFF; --ok: #1F7A57;
+  --c1: #E3A21A; --c2: #2E9170; --c3: #D4452E; --c4: #4F74B3; --c5: #9A5392;
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1D1A; --surface: #152A26; --fg: #E6EFE9; --muted: #9DB3AB; --line: #2A4540; --track: #213833;
+    --accent: #F0674F; --accent-fg: #1B0E0B; --ok: #5CC79B;
+    --c1: #F0B93E; --c2: #4DBB96; --c3: #EE6A52; --c4: #7C9FD9; --c5: #C27EBB;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  min-height: 100vh;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 20px; }
+[hidden] { display: none !important; }
+
+/* Top bar */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -.01em; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.stepper { display: flex; gap: 6px; }
+.stepper i { width: 28px; height: 6px; border-radius: 999px; background: var(--track); transition: background .4s; }
+.stepper i.on { background: var(--ok); }
+.stepper i.cur { background: var(--accent); }
+
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-weight: 800; font-size: clamp(32px, 6vw, 52px); line-height: 1.04; letter-spacing: -.02em; }
+h2 { font-weight: 700; font-size: clamp(22px, 3.6vw, 30px); line-height: 1.15; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 14px; min-width: 0; }
+.narrow { max-width: 680px; margin: 0 auto; width: 100%; }
+
+/* Controls */
+label.lab { display: grid; gap: 6px; font-weight: 700; font-size: 14px; }
+input[type="text"], textarea, select {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; min-height: 44px; width: 100%; min-width: 0;
+}
+textarea { min-height: 130px; resize: vertical; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, .btn:focus-visible, .opt:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+input.code { max-width: 200px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+.btnrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 46px; padding: 0 22px;
+  font: inherit; font-weight: 700; border-radius: 10px; border: 1.5px solid var(--fg); background: transparent; color: var(--fg);
+  cursor: pointer; text-decoration: none; transition: transform .15s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.err { color: var(--accent); font-weight: 700; font-size: 14px; min-height: 1.3em; }
+
+.opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--bg); }
+.opt input { margin-top: 4px; accent-color: var(--accent); width: 18px; height: 18px; flex: none; }
+.opt.sel { border-color: var(--fg); background: var(--track); }
+.opts { display: grid; gap: 8px; }
+
+/* Wizard */
+.bar { height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 999px; transition: width .4s ease; }
+.qmeta { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.qbm { font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 4vw, 30px); line-height: 1.15; }
+.qen { color: var(--muted); }
+.qhint { font-size: 14px; color: var(--muted); padding: 10px 12px; border-left: 3px solid var(--line); }
+.slide { animation: slide .3s ease; }
+@keyframes slide { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.gridrow { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.gridrow:first-child { border-top: 0; }
+.gridrow b { font-family: var(--font-display); font-size: 18px; }
+
+/* Explore */
+.explore { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); display: grid; }
+.frame iframe { width: 100%; height: min(78vh, 720px); border: 0; display: block; background: #fff; }
+.frame .fbar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 14px; }
+.side { display: grid; gap: 14px; min-width: 0; }
+.wheelbox svg { display: block; width: 100%; max-width: 100%; height: auto; }
+.wedge { fill: var(--track); transition: fill .5s ease, transform .5s ease; transform-origin: 150px 150px; }
+.wedge.on { fill: var(--wc); }
+.wedge.pop { transform: scale(1.04); }
+.wlabel { font-size: 11px; font-weight: 700; letter-spacing: .1em; fill: var(--muted); }
+.wlabel.on { fill: var(--fg); }
+.pts { font-family: var(--font-display); font-weight: 800; font-size: 44px; fill: var(--fg); }
+.ptsub { font-size: 11px; fill: var(--muted); letter-spacing: .08em; }
+.timer .row { display: flex; justify-content: space-between; font-size: 14px; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.missions { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mission { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.mission:first-child { border-top: 0; }
+.dot { width: 10px; border-radius: 6px; background: var(--track); align-self: stretch; transition: background .4s; }
+.mission.on .dot { background: var(--mc); }
+.mhead { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+.mhead span { font-weight: 500; font-size: 13px; color: var(--ok); }
+.mq { font-size: 14px; color: var(--muted); margin: 0 0 6px; }
+
+/* Done */
+.dict { display: grid; margin: 0; padding: 0; list-style: none; }
+.dict li { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+.dict small { flex: 0 0 80px; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; font-weight: 700; color: var(--muted); }
+.dict span { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+.badge { border: 2px solid var(--ok); border-radius: 14px; padding: 22px; display: grid; gap: 10px; background: var(--surface); }
+
+.spin { width: 18px; height: 18px; border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; display: inline-block; }
+@keyframes sp { to { transform: rotate(360deg); } }
+
+@media (max-width: 860px) { .explore { grid-template-columns: minmax(0, 1fr); } .frame iframe { height: 60vh; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Misi SENSAVOUR</div>
+    <div class="chips" id="chips" hidden>
+      <span class="stepper" id="stepper" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="chip" id="chipCode"></span>
+      <span class="chip" id="chipPts">0 mata</span>
+    </div>
+  </header>
+
+  <main id="view"></main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ================= Data soalan (sama seperti skrip Google Form asal) ================= */
+var FOODS = ['Hinava','Pinasakan Sada','Tuhau','Linopot','Ambuyat','Sarawak Laksa','Manok Pansuh','Midin','Kek Lapis Sarawak','Tonsom/Nonsom Bambangan'];
+var FAM = [
+  'I have never heard of this food. / Saya tidak pernah mendengar tentang makanan ini.',
+  'I have heard of it but know little about it. / Saya pernah mendengarnya tetapi kurang mengetahuinya.',
+  'I know about it but have never tasted it. / Saya tahu tentang makanan ini tetapi belum pernah merasainya.',
+  'I have tasted it once or a few times. / Saya pernah merasainya sekali atau beberapa kali.',
+  'I am very familiar with it and have tasted it several times. / Saya sangat mengenalinya dan pernah merasainya beberapa kali.'
+];
+var DESC_HINT = 'Huraikan dengan perkataan sendiri. Boleh sebut rupa, aroma, rasa, tekstur atau bunyi, jika dapat dinilai. Kalau tak biasa atau tak dapat nilai sesuatu ciri, tulis begitu dan jangan meneka. / Describe in your own words. You may mention appearance, aroma, taste, texture or sound if assessable. If unfamiliar, say so rather than guessing.';
+
+var PRE = [
+  { id:'q3', type:'radio', req:true, bm:'Kumpulan umur', en:'Age group', opts:[
+    '17 or below / 17 tahun atau ke bawah','18–20 years / 18–20 tahun','21–23 years / 21–23 tahun','24–26 years / 24–26 tahun','27 years or above / 27 tahun atau ke atas','Prefer not to say / Tidak mahu menyatakan'] },
+  { id:'q4', type:'radio', req:false, bm:'Jantina (pilihan)', en:'Gender (optional)', opts:['Female / Perempuan','Male / Lelaki','Prefer not to say / Tidak mahu menyatakan'] },
+  { id:'q5', type:'radio', req:true, other:true, bm:'Program pengajian', en:'Programme of study', opts:[
+    'Certificate in Culinary Arts / Sijil Kulinari','Certificate in Hotel Operations / Sijil Operasi Perhotelan','Other hospitality or tourism programme / Program hospitaliti atau pelancongan lain','Other programme / Program lain'] },
+  { id:'q6', type:'radio', req:true, bm:'Semester atau tahun pengajian', en:'Current semester / year of study', opts:[
+    'Semester 1 / Semester 1','Semester 2 / Semester 2','Semester 3 / Semester 3','Semester 4 / Semester 4','Semester 5 or above / Semester 5 atau ke atas','Other / Not applicable / Lain-lain / Tidak berkenaan'] },
+  { id:'q7', type:'radio', req:true, bm:'Pernahkah anda mempelajari penilaian sensori atau cara menghuraikan makanan menggunakan istilah sensori?', en:'Have you previously learned about sensory evaluation or how to describe food using sensory terms?', opts:[
+    'Never / Tidak pernah','A little, informally / Sedikit, secara tidak formal','As part of a course or subject / Sebagai sebahagian daripada kursus atau subjek','Several times through lessons or practice / Beberapa kali melalui pembelajaran atau latihan','Not sure / Tidak pasti'] },
+  { id:'q8', type:'grid', req:true, bm:'Tahap keakraban dengan makanan sebelum kajian', en:'Prior food familiarity', hint:'Sebelum menggunakan SENSAVOUR, pilih satu jawapan bagi setiap makanan. / Before using SENSAVOUR, select one answer for every food.', rows:FOODS, opts:FAM }
+];
+FOODS.forEach(function (f, i) {
+  PRE.push({ id:'q' + (9 + i), type:'para', req:true, bm:'Huraikan ' + f + ' dengan perkataan anda sendiri.', en:'Describe ' + f + ' in your own words.', hint:DESC_HINT });
+});
+
+var POST = [];
+FOODS.forEach(function (f, i) {
+  POST.push({ id:'q' + (21 + i), type:'para', req:true, bm:'Huraikan ' + f + ' dengan perkataan anda sendiri.', en:'Describe ' + f + ' in your own words.', hint:DESC_HINT });
+});
+POST = POST.concat([
+  { id:'q31', type:'para', req:true, bm:'Bagaimanakah, jika ada, penggunaan SENSAVOUR mempengaruhi cara anda menghuraikan makanan tradisional?', en:'How, if at all, did using SENSAVOUR influence the way you described the traditional foods?', hint:'Jelaskan pengalaman anda dan berikan contoh daripada huraian anda. / Explain your experience and give examples from your descriptions.' },
+  { id:'q32', type:'para', req:true, bm:'Apakah perkataan atau frasa sensori yang anda pelajari, temui atau mula gunakan selepas meneroka SENSAVOUR?', en:'Which sensory words or phrases did you learn, discover or begin using after exploring SENSAVOUR?', hint:'Berikan contoh dan jelaskan maksud perkataan tersebut kepada anda. / Give examples and explain what the words mean to you.' },
+  { id:'q33', type:'para', req:true, bm:'Bahagian manakah dalam SENSAVOUR yang paling membantu anda, jika ada? Mengapa?', en:'Which part of SENSAVOUR was most helpful to you, if any? Why?', hint:'Roda sensori, definisi kosa kata, contoh makanan atau maklumat berkaitan makanan. / The sensory wheel, vocabulary definitions, food examples or food-related information.' },
+  { id:'q34', type:'para', req:true, bm:'Adakah mana-mana bahagian SENSAVOUR mengelirukan, sukar difahami atau kurang berguna kepada anda?', en:'Was any part of SENSAVOUR confusing, difficult to understand or not useful to you?', hint:'Jelaskan dengan jujur. Tulis “tiada” jika tiada kesukaran. / Explain honestly. Write “none” if you had no difficulty.' },
+  { id:'q35', type:'para', req:false, bm:'Apakah penambahbaikan yang anda cadangkan untuk SENSAVOUR?', en:'What improvements would you suggest for SENSAVOUR?', hint:'Pilihan. / Optional.' },
+  { id:'q36', type:'para', req:false, bm:'Adakah perkara lain yang ingin anda kongsikan tentang penggunaan SENSAVOUR?', en:'Is there anything else you would like to share about using SENSAVOUR?', hint:'Pilihan. / Optional.' }
+]);
+
+var CATS = [
+  { k:'rupa',    n:'Rupa',    c:'var(--c1)', q:'Cari satu perkataan untuk RUPA makanan (warna, kilauan, bentuk).' },
+  { k:'aroma',   n:'Aroma',   c:'var(--c2)', q:'Cari satu perkataan untuk AROMA atau bau makanan.' },
+  { k:'rasa',    n:'Rasa',    c:'var(--c3)', q:'Cari satu perkataan untuk RASA atau perisa makanan.' },
+  { k:'tekstur', n:'Tekstur', c:'var(--c4)', q:'Cari satu perkataan untuk TEKSTUR di mulut.' },
+  { k:'bunyi',   n:'Bunyi',   c:'var(--c5)', q:'Cari satu perkataan untuk BUNYI semasa makanan digigit atau dikunyah.' }
+];
+
+/* ================= Keadaan & Firebase ================= */
+var CFG = window.APP_CONFIG || {};
+var FBC = window.FIREBASE_CONFIG || {};
+var MIN = CFG.MIN_EXPLORE_SECONDS || 300;
+var db, auth, uid = null, doc = null, skew = 0;
+var ans = {};              // jawapan draf (pra & pasca)
+var W = null;              // keadaan wizard
+var words = {};            // perkataan misi
+var tickTimer = null, saveQ = Promise.resolve();
+
+function $(id) { return document.getElementById(id); }
+function ref() { return db.collection('participants').doc(uid); }
+function ts() { return firebase.firestore.FieldValue.serverTimestamp(); }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; }
+function draftKey() { return 'sensavour-draft-' + uid; }
+function saveDraft() { try { localStorage.setItem(draftKey(), JSON.stringify(ans)); } catch (e) {} }
+function loadDraft() { try { var r = localStorage.getItem(draftKey()); return r ? JSON.parse(r) : {}; } catch (e) { return {}; } }
+async function refresh() { var s = await ref().get(); doc = s.exists ? s.data() : null; return doc; }
+async function upd(patch) { await ref().update(patch); await refresh(); }
+
+function wordCount() { return CATS.filter(function (c) { return (words[c.k] || '').trim().length >= 2; }).length; }
+function startMs() { return doc && doc.exploreStartedAt ? doc.exploreStartedAt.toMillis() : null; }
+function elapsed() { var s = startMs(); return s ? Math.max(0, Math.floor((Date.now() + skew - s) / 1000)) : 0; }
+function points() {
+  if (!doc) return 0;
+  return (doc.preSubmittedAt ? 20 : 0) + wordCount() * 10 + ((doc.unlockedAt || elapsed() >= MIN) ? 10 : 0) + (doc.postSubmittedAt ? 20 : 0);
+}
+function phase() {
+  if (!doc) return 'welcome';
+  if (!doc.preSubmittedAt) return 'pre';
+  if (!doc.unlockedAt) return 'explore';
+  if (!doc.postSubmittedAt) return 'post';
+  return 'done';
+}
+function header() {
+  var p = phase();
+  $('chips').hidden = !doc;
+  if (!doc) return;
+  $('chipCode').textContent = doc.code;
+  $('chipPts').textContent = points() + ' mata';
+  var idx = { pre:0, explore:1, post:2, done:3 }[p];
+  Array.prototype.forEach.call($('stepper').children, function (el, i) {
+    el.className = i < idx ? 'on' : (i === idx ? 'cur' : '');
+  });
+}
+function show(html) { clearInterval(tickTimer); $('view').innerHTML = html; header(); window.scrollTo(0, 0); }
+
+/* ================= Paparan ================= */
+function viewError(msg) {
+  show('<section class="card narrow"><h2>Tak dapat bersambung</h2><p class="muted">' + esc(msg) + '</p><div class="btnrow"><button class="btn primary" id="retry">Cuba lagi</button></div></section>');
+  $('retry').onclick = function () { boot(); };
+}
+
+function viewConfig() {
+  show('<section class="card narrow"><h2>Tetapan Firebase belum diisi</h2><p class="muted">Penyelidik: buka <b>firebase-config.js</b> dan tampal config web app Firebase. Langkah penuh ada dalam README.</p></section>');
+}
+
+function viewWelcome() {
+  show(
+    '<section class="card narrow">' +
+      '<div class="eyebrow">Kajian kosa kata sensori · Hospitaliti</div>' +
+      '<h1>Huraikan rasa Borneo dengan kata yang tepat</h1>' +
+      '<p class="muted">Tiga langkah: pra-ujian, teroka SENSAVOUR, pasca-ujian. Penuhkan roda deria anda dan buka kunci pasca-ujian. Boleh jawab dalam Bahasa Melayu atau English.</p>' +
+      '<label class="lab" for="code">Kod peserta / Participant code<input type="text" id="code" class="code" maxlength="4" autocomplete="off" placeholder="S001"></label>' +
+      '<p class="small muted">Gunakan kod yang diberi penyelidik, contoh S001. Jangan masukkan nama atau nombor matrik. / Do not enter your name or student ID.</p>' +
+      '<div class="opts" role="radiogroup" aria-label="Persetujuan">' +
+        '<p><b>Persetujuan / Consent</b></p>' +
+        '<p class="small muted">Saya telah membaca maklumat kajian, memahami tujuannya dan bersetuju untuk menyertai kajian ini secara sukarela. / I have read the study information, understand its purpose and voluntarily agree to participate.</p>' +
+        '<label class="opt"><input type="radio" name="consent" value="yes"><span>Yes, I agree to participate. / Ya, saya bersetuju untuk menyertai kajian ini.</span></label>' +
+        '<label class="opt"><input type="radio" name="consent" value="no"><span>No, I do not agree to participate. / Tidak, saya tidak bersetuju untuk menyertai kajian ini.</span></label>' +
+      '</div>' +
+      '<p class="err" id="err" role="alert"></p>' +
+      '<div class="btnrow"><button class="btn primary" id="go">Mula misi</button></div>' +
+    '</section>'
+  );
+  var opts = document.querySelectorAll('input[name="consent"]');
+  Array.prototype.forEach.call(opts, function (o) {
+    o.onchange = function () { Array.prototype.forEach.call(opts, function (x) { x.closest('.opt').classList.toggle('sel', x.checked); }); };
+  });
+  $('go').onclick = async function () {
+    var code = $('code').value.trim().toUpperCase();
+    var c = document.querySelector('input[name="consent"]:checked');
+    if (!/^S\d{3}$/.test(code)) { $('err').textContent = 'Masukkan kod dalam format S001.'; return; }
+    if (!c) { $('err').textContent = 'Pilih sama ada anda bersetuju atau tidak.'; return; }
+    if (c.value === 'no') {
+      show('<section class="card narrow"><h2>Terima kasih</h2><p class="muted">Tiada data anda disimpan. Anda boleh menutup halaman ini. / No data was saved. You may close this page.</p></section>');
+      return;
+    }
+    var b = $('go'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+    try {
+      await ref().set({ code: code, consentAt: ts(), createdAt: ts(), stage: 'pre' });
+      await refresh(); route();
+    } catch (e) {
+      b.disabled = false; b.textContent = 'Mula misi';
+      $('err').textContent = 'Tak dapat menyimpan. Semak sambungan internet dan cuba lagi.';
+      console.error(e);
+    }
+  };
+}
+
+/* ---------- Wizard (pra & pasca) ---------- */
+function viewIntro(kind) {
+  var pre = kind === 'pre';
+  show(
+    '<section class="card narrow">' +
+      '<div class="eyebrow">Langkah ' + (pre ? '1' : '3') + ' / ' + (pre ? 'Step 1' : 'Step 3') + '</div>' +
+      '<h1>' + (pre ? 'Pra-Ujian' : 'Pasca-Ujian & Refleksi') + '</h1>' +
+      '<p class="muted">' + (pre
+        ? 'Jawab SEBELUM membuka SENSAVOUR. Jawapan yang dihantar tidak boleh diubah, jadi jawab ikut apa yang anda tahu sekarang. / Answer BEFORE opening SENSAVOUR. Submitted answers cannot be changed.'
+        : 'Huraikan makanan yang sama dengan sampel atau rangsangan yang sama seperti pra-ujian. Anda kini boleh guna apa yang dipelajari dalam SENSAVOUR. / Describe the same foods with the same samples as the pre-test. You may now use what you learned.') + '</p>' +
+      '<p class="qhint">Jawab sendiri dan jujur. Jangan guna kamus, laman web atau alat AI semasa menghuraikan makanan. Huraikan hanya ciri yang anda sendiri perhatikan. / Answer independently and honestly. Do not use dictionaries, websites or AI tools. Describe only what you have observed.</p>' +
+      '<div class="btnrow"><button class="btn primary" id="start">Mula</button></div>' +
+    '</section>'
+  );
+  $('start').onclick = function () { startWizard(kind); };
+}
+
+function startWizard(kind) {
+  ans = loadDraft();
+  W = { kind: kind, list: kind === 'pre' ? PRE : POST, idx: 0 };
+  // sambung dari soalan pertama yang belum dijawab
+  for (var i = 0; i < W.list.length; i++) { if (!answered(W.list[i])) { W.idx = i; break; } }
+  renderQ();
+}
+function answered(q) {
+  var v = ans[q.id];
+  if (q.type === 'grid') return v && q.rows.every(function (r) { return v[r]; });
+  if (q.type === 'para') return (v || '').trim().length >= 2;
+  if (q.type === 'radio') {
+    if (!v) return false;
+    if (v === '__other__') return (ans[q.id + '_other'] || '').trim().length >= 2;
+    return true;
+  }
+  return !!v;
+}
+function renderQ() {
+  var q = W.list[W.idx], n = W.list.length, last = W.idx === n - 1;
+  var num = q.id.replace('q', 'Q');
+  var body = '';
+  if (q.type === 'radio') {
+    body += '<div class="opts" role="radiogroup">';
+    q.opts.forEach(function (o, i) {
+      body += '<label class="opt"><input type="radio" name="r" value="' + i + '"><span>' + esc(o) + '</span></label>';
+    });
+    if (q.other) body += '<label class="opt"><input type="radio" name="r" value="other"><span>Other / Lain-lain <input type="text" id="oth" maxlength="80" style="margin-top:8px" placeholder="Nyatakan / Specify"></span></label>';
+    body += '</div>';
+  } else if (q.type === 'grid') {
+    q.rows.forEach(function (r, i) {
+      body += '<div class="gridrow"><b>' + esc(r) + '</b><select data-row="' + i + '" aria-label="' + esc(r) + '"><option value="">Pilih / Select…</option>' +
+        q.opts.map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select></div>';
+    });
+  } else {
+    body += '<textarea id="ta" maxlength="1500" placeholder="Taip jawapan anda di sini / Type your answer here"></textarea>';
+  }
+  show(
+    '<section class="card narrow slide">' +
+      '<div class="bar" aria-hidden="true"><i style="width:' + Math.round(W.idx / n * 100) + '%"></i></div>' +
+      '<div class="qmeta"><span>' + num + (q.req ? '' : ' · pilihan') + '</span><span>' + (W.idx + 1) + ' / ' + n + '</span></div>' +
+      '<h2 class="qbm">' + esc(q.bm) + '</h2><p class="qen">' + esc(q.en) + '</p>' +
+      (q.hint ? '<p class="qhint">' + esc(q.hint) + '</p>' : '') +
+      body +
+      '<p class="err" id="err" role="alert"></p>' +
+      '<div class="btnrow"><button class="btn" id="back"' + (W.idx === 0 ? ' disabled' : '') + '>Kembali</button>' +
+      '<button class="btn primary" id="next">' + (last ? 'Hantar' : 'Seterusnya') + '</button></div>' +
+    '</section>'
+  );
+
+  // pulihkan jawapan
+  if (q.type === 'radio') {
+    var radios = document.querySelectorAll('input[name="r"]');
+    var cur = ans[q.id];
+    Array.prototype.forEach.call(radios, function (r) {
+      var val = r.value === 'other' ? '__other__' : q.opts[+r.value];
+      if (cur === val) { r.checked = true; r.closest('.opt').classList.add('sel'); }
+      r.onchange = function () {
+        ans[q.id] = val; saveDraft();
+        Array.prototype.forEach.call(radios, function (x) { x.closest('.opt').classList.toggle('sel', x.checked); });
+      };
+    });
+    if (q.other) {
+      $('oth').value = ans[q.id + '_other'] || '';
+      $('oth').oninput = function () {
+        ans[q.id + '_other'] = $('oth').value; ans[q.id] = '__other__'; saveDraft();
+        Array.prototype.forEach.call(radios, function (x) { x.checked = x.value === 'other'; x.closest('.opt').classList.toggle('sel', x.checked); });
+      };
+    }
+  } else if (q.type === 'grid') {
+    var sels = document.querySelectorAll('select[data-row]');
+    var g = ans[q.id] || {};
+    Array.prototype.forEach.call(sels, function (s) {
+      var row = q.rows[+s.getAttribute('data-row')];
+      if (g[row]) s.value = g[row];
+      s.onchange = function () { ans[q.id] = ans[q.id] || {}; ans[q.id][row] = s.value; saveDraft(); };
+    });
+  } else {
+    var ta = $('ta'); ta.value = ans[q.id] || '';
+    ta.oninput = function () { ans[q.id] = ta.value; saveDraft(); };
+    ta.focus();
+  }
+
+  $('back').onclick = function () { if (W.idx > 0) { W.idx--; renderQ(); } };
+  $('next').onclick = async function () {
+    if (q.req && !answered(q)) {
+      $('err').textContent = q.type === 'grid' ? 'Sila pilih jawapan untuk semua makanan.' : (q.type === 'para' ? 'Sila tulis sekurang-kurangnya beberapa perkataan. Kalau tak tahu, tulis begitu.' : 'Sila pilih satu jawapan.');
+      return;
+    }
+    if (!last) { W.idx++; renderQ(); return; }
+    await submitWizard();
+  };
+}
+
+function finalValue(q) {
+  var v = ans[q.id];
+  if (q.type === 'radio') return v === '__other__' ? 'Other: ' + (ans[q.id + '_other'] || '').trim() : (v || '');
+  if (q.type === 'para') return (v || '').trim();
+  return v || '';
+}
+async function submitWizard() {
+  var b = $('next'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try {
+    if (W.kind === 'pre') {
+      var profile = {}, pre = {};
+      PRE.forEach(function (q) {
+        if (q.id === 'q8') profile.q8 = ans.q8;
+        else if (q.type === 'para') pre[q.id] = finalValue(q);
+        else profile[q.id] = finalValue(q);
+      });
+      await upd({ profile: profile, pre: pre, preSubmittedAt: ts(), stage: 'explore' });
+    } else {
+      var post = {}, reflection = {};
+      POST.forEach(function (q) {
+        var id = +q.id.slice(1);
+        if (id <= 30) post[q.id] = finalValue(q); else reflection[q.id] = finalValue(q);
+      });
+      await upd({ post: post, reflection: reflection, postSubmittedAt: ts(), stage: 'done' });
+    }
+    try { localStorage.removeItem(draftKey()); } catch (e) {}
+    route();
+  } catch (e) {
+    console.error(e);
+    b.disabled = false; b.textContent = 'Hantar';
+    $('err').textContent = 'Tak dapat menghantar. Semak sambungan internet dan tekan Hantar semula. Jawapan anda masih disimpan di peranti ini.';
+  }
+}
+
+/* ---------- Roda deria ---------- */
+function pol(r, a) { var t = a * Math.PI / 180; return [150 + r * Math.cos(t), 150 + r * Math.sin(t)]; }
+function wedgePath(a0, a1, r0, r1) {
+  var p0 = pol(r1, a0), p1 = pol(r1, a1), p2 = pol(r0, a1), p3 = pol(r0, a0);
+  return 'M' + p0[0] + ' ' + p0[1] + 'A' + r1 + ' ' + r1 + ' 0 0 1 ' + p1[0] + ' ' + p1[1] + 'L' + p2[0] + ' ' + p2[1] + 'A' + r0 + ' ' + r0 + ' 0 0 0 ' + p3[0] + ' ' + p3[1] + 'Z';
+}
+function wheelSVG() {
+  var out = '<svg viewBox="-40 -10 380 320" role="img" aria-label="Roda deria lima bahagian">';
+  CATS.forEach(function (c, i) {
+    var a0 = -90 + i * 72 + 1.5, a1 = -90 + (i + 1) * 72 - 1.5, mid = -90 + i * 72 + 36;
+    out += '<path class="wedge" id="wd-' + c.k + '" style="--wc:' + c.c + '" d="' + wedgePath(a0, a1, 54, 122) + '"/>';
+    var lp = pol(140, mid), cs = Math.cos(mid * Math.PI / 180), anchor = Math.abs(cs) < 0.3 ? 'middle' : (cs > 0 ? 'start' : 'end');
+    out += '<text class="wlabel" id="wl-' + c.k + '" x="' + lp[0].toFixed(1) + '" y="' + (lp[1] + 4).toFixed(1) + '" text-anchor="' + anchor + '">' + c.n.toUpperCase() + '</text>';
+  });
+  return out + '<text class="pts" id="pts" x="150" y="158" text-anchor="middle">0</text><text class="ptsub" x="150" y="176" text-anchor="middle">DARIPADA 100 MATA</text></svg>';
+}
+
+/* ---------- Teroka ---------- */
+function viewExplore() {
+  words = Object.assign({}, doc.words || {});
+  var started = !!doc.exploreStartedAt;
+  var url = CFG.SENSAVOUR_URL;
+  var missions = CATS.map(function (c) {
+    return '<li class="mission" id="m-' + c.k + '" style="--mc:' + c.c + '"><i class="dot"></i><div><div class="mhead">' + c.n + '<span hidden>+10 mata</span></div>' +
+      '<p class="mq">' + c.q + '</p><input type="text" id="w-' + c.k + '" maxlength="40" autocomplete="off" aria-label="Perkataan ' + c.n + '" placeholder="Perkataan yang anda jumpa"></div></li>';
+  }).join('');
+  show(
+    '<div class="eyebrow">Langkah 2 / Step 2</div><h1>Teroka SENSAVOUR</h1>' +
+    '<div class="explore">' +
+      '<div class="frame">' +
+        '<iframe id="fr" title="SENSAVOUR" src="' + esc(url) + '" loading="lazy"></iframe>' +
+        '<div class="fbar"><span class="muted">Kalau kad tak muncul di sini, buka di tab baru.</span><a class="btn" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">Buka tab baru ↗</a></div>' +
+      '</div>' +
+      '<div class="side">' +
+        '<div class="card"><div id="wheel" class="wheelbox"></div></div>' +
+        '<div class="card" id="startbox"' + (started ? ' hidden' : '') + '><p>Bersedia? Pemasa bermula bila anda tekan butang ini.</p><div class="btnrow"><button class="btn primary" id="begin">Mula meneroka</button></div></div>' +
+        '<div class="card" id="work"' + (started ? '' : ' hidden') + '>' +
+          '<div class="timer"><div class="row"><span>Masa meneroka</span><span><b id="tnow">00:00</b> / ' + fmt(MIN) + '</span></div><div class="bar"><i id="tfill"></i></div></div>' +
+          '<p class="small muted">Untuk setiap bahagian roda, cari satu perkataan dalam SENSAVOUR yang anda belum biasa guna dan taip di bawah.</p>' +
+          '<ul class="missions">' + missions + '</ul>' +
+          '<p class="small muted" id="unhint"></p><p class="err" id="err" role="alert"></p>' +
+          '<div class="btnrow"><button class="btn primary" id="unlock" disabled>Buka kunci Pasca-Ujian</button><span class="small muted" id="saved"></span></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+  $('wheel').innerHTML = wheelSVG();
+  CATS.forEach(function (c) {
+    var inp = $('w-' + c.k);
+    inp.value = words[c.k] || '';
+    inp.oninput = function () { words[c.k] = inp.value; refreshExplore(c.k); queueSave(); };
+  });
+  $('begin').onclick = async function () {
+    var b = $('begin'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+    try {
+      await upd({ exploreStartedAt: ts(), stage: 'explore' });
+      skew = startMs() - Date.now();
+      $('startbox').hidden = true; $('work').hidden = false;
+      refreshExplore();
+    } catch (e) { console.error(e); b.disabled = false; b.textContent = 'Mula meneroka'; }
+  };
+  $('unlock').onclick = unlockPost;
+  refreshExplore();
+  tickTimer = setInterval(refreshExplore, 1000);
+}
+var lastOn = {};
+function refreshExplore(changed) {
+  if (!$('wheel')) return;
+  CATS.forEach(function (c) {
+    var on = (words[c.k] || '').trim().length >= 2;
+    $('wd-' + c.k).classList.toggle('on', on); $('wl-' + c.k).classList.toggle('on', on);
+    $('m-' + c.k).classList.toggle('on', on); $('m-' + c.k).querySelector('.mhead span').hidden = !on;
+    if (on && !lastOn[c.k] && changed === c.k) { var w = $('wd-' + c.k); w.classList.add('pop'); setTimeout(function () { w.classList.remove('pop'); }, 450); }
+    lastOn[c.k] = on;
+  });
+  var p = points(); $('pts').textContent = p; $('chipPts').textContent = p + ' mata';
+  if (!doc.exploreStartedAt) return;
+  var el = elapsed(), cap = Math.min(el, MIN);
+  $('tnow').textContent = fmt(cap); $('tfill').style.width = (cap / MIN * 100) + '%';
+  var need = [], wc = wordCount();
+  if (wc < 5) need.push((5 - wc) + ' perkataan lagi');
+  if (el < MIN) need.push('tunggu ' + fmt(MIN - el));
+  $('unhint').textContent = need.length ? 'Untuk buka kunci: ' + need.join(', ') + '.' : 'Semua siap. Tekan butang untuk buka kunci.';
+  $('unlock').disabled = need.length > 0;
+}
+function queueSave() {
+  clearTimeout(queueSave.t);
+  queueSave.t = setTimeout(function () {
+    saveQ = saveQ.then(async function () {
+      var clean = {};
+      CATS.forEach(function (c) { var v = (words[c.k] || '').trim(); if (v.length >= 2) clean[c.k] = v; });
+      try { await upd({ words: clean }); if ($('saved')) { $('saved').textContent = 'Disimpan'; setTimeout(function () { if ($('saved')) $('saved').textContent = ''; }, 1500); } }
+      catch (e) { console.error(e); if ($('saved')) $('saved').textContent = 'Tak dapat simpan, cuba lagi'; }
+    });
+  }, 600);
+}
+async function unlockPost() {
+  var b = $('unlock'); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try {
+    await saveQ;
+    var clean = {};
+    CATS.forEach(function (c) { var v = (words[c.k] || '').trim(); if (v.length >= 2) clean[c.k] = v; });
+    await upd({ words: clean });
+    await upd({ unlockedAt: ts(), stage: 'post' });
+    route();
+  } catch (e) {
+    console.error(e);
+    b.textContent = 'Buka kunci Pasca-Ujian'; refreshExplore();
+    $('err').textContent = (e && e.code === 'permission-denied')
+      ? 'Pelayan belum mengesahkan masa meneroka. Tunggu beberapa saat dan tekan lagi.'
+      : 'Tak dapat membuka kunci. Semak sambungan internet dan cuba lagi.';
+  }
+}
+
+/* ---------- Siap ---------- */
+function viewDone() {
+  var items = CATS.map(function (c) { return '<li><small>' + c.n + '</small><span>' + esc((doc.words && doc.words[c.k]) || '') + '</span></li>'; }).join('');
+  show(
+    '<section class="badge narrow"><div class="eyebrow">Misi selesai</div><h1>Pakar Deria Borneo</h1>' +
+    '<p class="muted">Terima kasih kerana menyertai kajian ini, ' + esc(doc.code) + '. Roda anda penuh dan jawapan anda telah dihantar.</p>' +
+    '<h3>Kamus kecil anda</h3><ul class="dict">' + items + '</ul>' +
+    '<p class="small muted">Anda boleh menutup halaman ini. / You may now close this page.</p></section>'
+  );
+}
+
+function route() {
+  var p = phase();
+  if (p === 'welcome') return viewWelcome();
+  if (p === 'pre') return viewIntro('pre');
+  if (p === 'explore') return viewExplore();
+  if (p === 'post') return viewIntro('post');
+  return viewDone();
+}
+
+async function boot() {
+  if (!FBC.apiKey || String(FBC.apiKey).indexOf('GANTI') === 0) return viewConfig();
+  show('<section class="card narrow"><p><span class="spin"></span> Menyambung…</p></section>');
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FBC);
+    auth = firebase.auth(); db = firebase.firestore();
+    var cred = await auth.signInAnonymously();
+    uid = cred.user.uid;
+    await refresh();
+    route();
+  } catch (e) {
+    console.error(e);
+    viewError('Semak sambungan internet atau minta penyelidik semak tetapan Firebase. (' + (e.code || e.message || 'ralat') + ')');
+  }
+}
+boot();
+</script>
+</body>
+</html>

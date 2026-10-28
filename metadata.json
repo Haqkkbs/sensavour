@@ -1,0 +1,6 @@
+{
+  "name": "Misi SENSAVOUR",
+  "description": "Aplikasi kajian kosa kata sensori makanan tradisional Borneo dengan pra-ujian, penerokaan interaktif SENSAVOUR, dan pasca-ujian berkunci.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Misi SENSAVOUR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#EDF1EA; --surface:#F9FBF7; --fg:#12302B; --muted:#4F6660; --line:#CBD7CE; --accent:#C8402B; --accent-fg:#fff; --ok:#1F7A57; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0E1D1A; --surface:#152A26; --fg:#E6EFE9; --muted:#9DB3AB; --line:#2A4540; --accent:#F0674F; --accent-fg:#1B0E0B; --ok:#5CC79B; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:'DM Sans',system-ui,sans-serif; line-height:1.5;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-family:'Bricolage Grotesque',system-ui,sans-serif; font-weight:800; font-size: clamp(28px,5vw,40px); margin:0; line-height:1.05; }
+.muted { color: var(--muted); } .small { font-size: 14px; }
+[hidden] { display:none !important; }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; display:grid; gap:12px; min-width:0; }
+.btn { min-height:44px; padding:0 20px; font:inherit; font-weight:700; border-radius:10px; border:1.5px solid var(--fg); background:transparent; color:var(--fg); cursor:pointer; }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-fg); }
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+.btn:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.btnrow { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
+.stat { padding:12px 14px; background:var(--bg); border-radius:10px; }
+.stat b { display:block; font-family:'Bricolage Grotesque',system-ui,sans-serif; font-size:30px; line-height:1.1; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+table { border-collapse:collapse; width:100%; font-size:14px; font-variant-numeric: tabular-nums; }
+th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+th { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); background:var(--surface); position:sticky; top:0; }
+.pill { font-size:12px; font-weight:700; padding:2px 10px; border-radius:999px; border:1px solid var(--line); }
+.pill.done { color:var(--ok); border-color:var(--ok); }
+.err { color: var(--accent); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Admin Misi SENSAVOUR</h1>
+
+  <section class="card" id="login">
+    <p class="muted">Untuk penyelidik sahaja. Log masuk dengan akaun Google yang disenaraikan dalam firestore.rules.</p>
+    <div class="btnrow"><button class="btn primary" id="signin">Log masuk dengan Google</button></div>
+    <p class="err" id="lerr" role="alert"></p>
+  </section>
+
+  <section id="panel" hidden style="display:grid;gap:18px">
+    <div class="card">
+      <div class="btnrow">
+        <span class="muted small" id="who"></span>
+        <button class="btn" id="reload">Muat semula</button>
+        <button class="btn primary" id="csv">Eksport CSV</button>
+        <button class="btn" id="signout">Log keluar</button>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr>
+      <th>Kod</th><th>Peringkat</th><th>Mula</th><th>Pra dihantar</th><th>Masa meneroka (min)</th><th>Pasca dihantar</th><th>Perkataan</th>
+    </tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+var FOODS = ['Hinava','Pinasakan Sada','Tuhau','Linopot','Ambuyat','Sarawak Laksa','Manok Pansuh','Midin','Kek Lapis Sarawak','Tonsom/Nonsom Bambangan'];
+var WORDS = ['rupa','aroma','rasa','tekstur','bunyi'];
+var db, auth, DATA = [];
+function $(id) { return document.getElementById(id); }
+function iso(t) { return t && t.toDate ? t.toDate().toISOString() : ''; }
+function mins(a, b) { return a && b ? ((b.toMillis() - a.toMillis()) / 60000).toFixed(1) : ''; }
+
+function stage(d) {
+  if (d.postSubmittedAt) return ['Siap', true];
+  if (d.unlockedAt) return ['Pasca-ujian', false];
+  if (d.preSubmittedAt) return ['Teroka', false];
+  return ['Pra-ujian', false];
+}
+
+async function load() {
+  $('rows').innerHTML = '<tr><td colspan="7">Memuatkan…</td></tr>';
+  try {
+    var snap = await db.collection('participants').orderBy('createdAt').get();
+    DATA = snap.docs.map(function (s) { var d = s.data(); d._uid = s.id; return d; });
+    render();
+  } catch (e) {
+    console.error(e);
+    $('rows').innerHTML = '<tr><td colspan="7" class="err">Tiada kebenaran atau ralat: ' + (e.code || e.message) + '. Semak emel admin dalam firestore.rules.</td></tr>';
+  }
+}
+
+function render() {
+  var n = DATA.length;
+  var pre = DATA.filter(function (d) { return d.preSubmittedAt; }).length;
+  var unl = DATA.filter(function (d) { return d.unlockedAt; }).length;
+  var done = DATA.filter(function (d) { return d.postSubmittedAt; }).length;
+  $('stats').innerHTML =
+    '<div class="stat"><b>' + n + '</b>Peserta</div><div class="stat"><b>' + pre + '</b>Pra siap</div>' +
+    '<div class="stat"><b>' + unl + '</b>Kunci dibuka</div><div class="stat"><b>' + done + '</b>Pasca siap</div>';
+  $('rows').innerHTML = DATA.map(function (d) {
+    var s = stage(d), w = d.words ? Object.keys(d.words).length : 0;
+    var tr = document.createElement('tr');
+    [d.code, null, iso(d.createdAt).slice(0, 16).replace('T', ' '), iso(d.preSubmittedAt).slice(0, 16).replace('T', ' '),
+      mins(d.exploreStartedAt, d.unlockedAt), iso(d.postSubmittedAt).slice(0, 16).replace('T', ' '), w + '/5'].forEach(function (v, i) {
+      var td = document.createElement('td');
+      if (i === 1) { var p = document.createElement('span'); p.className = 'pill' + (s[1] ? ' done' : ''); p.textContent = s[0]; td.appendChild(p); }
+      else td.textContent = v;
+      tr.appendChild(td);
+    });
+    return tr.outerHTML;
+  }).join('') || '<tr><td colspan="7" class="muted">Belum ada peserta.</td></tr>';
+}
+
+function csvCell(v) {
+  if (v === undefined || v === null) return '';
+  var s = String(v).replace(/\r?\n/g, ' ');
+  return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportCsv() {
+  var head = ['uid','participant_code','created_at','stage','pre_submitted_at','explore_started_at','unlocked_at','post_submitted_at','explore_minutes',
+    'Q3_age','Q4_gender','Q5_programme','Q6_semester','Q7_prior_learning'];
+  FOODS.forEach(function (f) { head.push('Q8_familiarity_' + f); });
+  FOODS.forEach(function (f, i) { head.push('Q' + (9 + i) + '_pre_' + f); });
+  WORDS.forEach(function (w) { head.push('word_' + w); });
+  FOODS.forEach(function (f, i) { head.push('Q' + (21 + i) + '_post_' + f); });
+  ['Q31','Q32','Q33','Q34','Q35','Q36'].forEach(function (q) { head.push(q + '_reflection'); });
+
+  var lines = [head.map(csvCell).join(',')];
+  DATA.forEach(function (d) {
+    var p = d.profile || {}, pre = d.pre || {}, post = d.post || {}, ref = d.reflection || {}, w = d.words || {}, fam = p.q8 || {};
+    var row = [d._uid, d.code, iso(d.createdAt), stage(d)[0], iso(d.preSubmittedAt), iso(d.exploreStartedAt), iso(d.unlockedAt), iso(d.postSubmittedAt), mins(d.exploreStartedAt, d.unlockedAt),
+      p.q3, p.q4, p.q5, p.q6, p.q7];
+    FOODS.forEach(function (f) { row.push(fam[f]); });
+    FOODS.forEach(function (f, i) { row.push(pre['q' + (9 + i)]); });
+    WORDS.forEach(function (k) { row.push(w[k]); });
+    FOODS.forEach(function (f, i) { row.push(post['q' + (21 + i)]); });
+    ['q31','q32','q33','q34','q35','q36'].forEach(function (q) { row.push(ref[q]); });
+    lines.push(row.map(csvCell).join(','));
+  });
+  var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sensavour_responses_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+
+function init() {
+  var c = window.FIREBASE_CONFIG || {};
+  if (!c.apiKey || String(c.apiKey).indexOf('GANTI') === 0) { $('lerr').textContent = 'Isi firebase-config.js dahulu.'; $('signin').disabled = true; return; }
+  firebase.initializeApp(c);
+  auth = firebase.auth(); db = firebase.firestore();
+  $('signin').onclick = function () {
+    $('lerr').textContent = '';
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) { $('lerr').textContent = 'Log masuk gagal: ' + (e.code || e.message); });
+  };
+  $('signout').onclick = function () { auth.signOut(); };
+  $('reload').onclick = load;
+  $('csv').onclick = exportCsv;
+  auth.onAuthStateChanged(function (u) {
+    var isGoogle = u && !u.isAnonymous;
+    $('login').hidden = !!isGoogle; $('panel').hidden = !isGoogle;
+    if (isGoogle) { $('who').textContent = u.email; load(); }
+  });
+}
+init();
+</script>
+</body>
+</html>
