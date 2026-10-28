@@ -299,7 +299,7 @@ export interface SensoryCategory {
 export const SENSORY_CATEGORIES: SensoryCategory[] = [
   { key: 'rupa', name: 'Rupa', color: '#E3A21A', question: 'Cari satu perkataan untuk RUPA makanan (warna, kilauan, bentuk).' },
   { key: 'aroma', name: 'Aroma', color: '#2E9170', question: 'Cari satu perkataan untuk AROMA atau bau makanan (cth: harum, wangi, hanyir).' },
-  { key: 'rasa', name: 'Rasa', color: '#D4452E', question: 'Cari satu perkataan untuk RASA atau perisa makanan (cth: manis, masam, masin, berlemak, lazat. Elakkan kata Indonesia "gurih", gunakan "berlemak" atau "lazat").' },
+  { key: 'rasa', name: 'Rasa', color: '#D4452E', question: 'Cari satu perkataan untuk RASA atau perisa makanan (cth: manis, masam, masin, berlemak, lazat, kaya perisa).' },
   { key: 'tekstur', name: 'Tekstur', color: '#4F74B3', question: 'Cari satu perkataan untuk TEKSTUR di mulut (cth: lembut, kenyal, liat, rapuh).' },
   { key: 'bunyi', name: 'Bunyi', color: '#9A5392', question: 'Cari satu perkataan untuk BUNYI semasa makanan digigit atau dikunyah (cth: rangup, krup-krap).' }
 ];
