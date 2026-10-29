@@ -11,8 +11,11 @@ import {
   LogIn,
   CheckCircle2,
   Hash,
-  Sparkles
+  Sparkles,
+  BookOpen,
+  X
 } from 'lucide-react';
+import { SensavourIntro } from './SensavourIntro';
 
 interface WelcomeViewProps {
   onStartMission: (customCode?: string) => Promise<void>;
@@ -36,6 +39,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRetryingAuth, setIsRetryingAuth] = useState<boolean>(false);
   const [hasDeclined, setHasDeclined] = useState<boolean>(false);
+  const [showIntroModal, setShowIntroModal] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,9 +104,19 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
   return (
     <div className="max-w-xl mx-auto w-full bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
       <div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#12302B]/10 text-[#12302B] rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-          <Compass className="w-3.5 h-3.5" />
-          Kajian Kosa Kata Sensori · Hospitaliti
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#12302B]/10 text-[#12302B] rounded-full text-xs font-bold uppercase tracking-wider">
+            <Compass className="w-3.5 h-3.5" />
+            Kajian Kosa Kata Sensori · Hospitaliti
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowIntroModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#1F7A57]/10 hover:bg-[#1F7A57]/20 text-[#1F7A57] rounded-full text-xs font-bold transition cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Pengenalan SENSAVOUR
+          </button>
         </div>
         <h1 className="text-2xl sm:text-4xl font-extrabold font-display text-[#12302B] leading-tight">
           Huraikan rasa Borneo dengan kata yang tepat
@@ -293,6 +307,42 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
           Portal Penyelidik / Researcher Admin
         </button>
       </div>
+
+      {/* Sensavour Intro Modal */}
+      {showIntroModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+          onClick={() => setShowIntroModal(false)}
+        >
+          <div
+            className="bg-[#F9FBF7] border border-[#CBD7CE] rounded-3xl max-w-4xl w-full p-4 sm:p-6 my-8 max-h-[90vh] overflow-y-auto shadow-2xl relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-end mb-2">
+              <button
+                type="button"
+                onClick={() => setShowIntroModal(false)}
+                className="p-2 rounded-full hover:bg-[#EDF1EA] text-[#4F6660] transition cursor-pointer"
+                aria-label="Tutup"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <SensavourIntro showContinueButton={false} />
+            <div className="text-center pt-6 pb-2">
+              <button
+                type="button"
+                onClick={() => setShowIntroModal(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#12302B] text-white font-bold text-sm hover:bg-[#1f4a41] transition cursor-pointer"
+              >
+                Tutup Pengenalan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
