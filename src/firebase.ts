@@ -193,3 +193,73 @@ export async function removeAdminEmail(email: string): Promise<void> {
   await deleteDoc(ref);
 }
 
+export interface AdminRequestRecord {
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  requestedAt: string;
+}
+
+/**
+ * Menghantar rekod permohonan akses penyelidik secara automatik apabila akaun Google log masuk
+ */
+export async function submitAdminRequest(
+  email: string,
+  displayName?: string,
+  photoURL?: string
+): Promise<void> {
+  const cleanEmail = email.toLowerCase().trim();
+  const ref = doc(db, 'admin_requests', cleanEmail);
+  await setDoc(ref, {
+    email: cleanEmail,
+    displayName: displayName || cleanEmail.split('@')[0],
+    photoURL: photoURL || '',
+    requestedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Mendapatkan senarai semua permohonan akses penyelidik yang belum diluluskan
+ */
+export async function fetchAdminRequests(): Promise<AdminRequestRecord[]> {
+  try {
+    const col = collection(db, 'admin_requests');
+    const snap = await getDocs(col);
+    const list: AdminRequestRecord[] = [];
+    snap.forEach(docSnap => {
+      const data = docSnap.data();
+      list.push({
+        email: docSnap.id || data.email,
+        displayName: data.displayName || '',
+        photoURL: data.photoURL || '',
+        requestedAt: data.requestedAt || ''
+      });
+    });
+    return list;
+  } catch (err) {
+    console.warn('Could not fetch admin requests:', err);
+    return [];
+  }
+}
+
+/**
+ * Meluluskan permohonan: tambah terus ke koleksi admins dan padam dari senarai menunggu
+ */
+export async function approveAdminRequest(email: string, approvedByEmail: string): Promise<void> {
+  const cleanEmail = email.toLowerCase().trim();
+  await addAdminEmail(cleanEmail, approvedByEmail);
+  try {
+    await deleteDoc(doc(db, 'admin_requests', cleanEmail));
+  } catch (e) {
+    console.warn('Could not delete admin request doc after approving:', e);
+  }
+}
+
+/**
+ * Menolak permohonan akses penyelidik
+ */
+export async function rejectAdminRequest(email: string): Promise<void> {
+  const cleanEmail = email.toLowerCase().trim();
+  await deleteDoc(doc(db, 'admin_requests', cleanEmail));
+}
+

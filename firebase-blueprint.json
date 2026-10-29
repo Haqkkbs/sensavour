@@ -102,6 +102,32 @@
         }
       },
       "required": ["email", "addedAt"]
+    },
+    "AdminRequest": {
+      "title": "AdminRequest",
+      "description": "Permohonan akses penyelidik daripada pengguna Google yang log masuk",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Alamat email pemohon"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Nama pengguna Google pemohon"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Foto profil pengguna Google"
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cap masa permohonan log masuk"
+        }
+      },
+      "required": ["email", "requestedAt"]
     }
   },
   "firestore": {
@@ -116,6 +142,10 @@
     "/admins/{adminEmail}": {
       "schema": "Admin",
       "description": "Koleksi email penyelidik yang dibenarkan mengakses portal"
+    },
+    "/admin_requests/{requestEmail}": {
+      "schema": "AdminRequest",
+      "description": "Koleksi permohonan akses penyelidik yang belum diluluskan"
     }
   }
 }

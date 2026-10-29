@@ -15,7 +15,6 @@ import {
   db,
   auth,
   PRIMARY_ADMIN_EMAIL,
-  ADMIN_EMAIL,
   handleFirestoreError,
   OperationType,
   getCurrentCounter,
@@ -24,7 +23,12 @@ import {
   deleteMultipleParticipants,
   fetchAdminEmails,
   addAdminEmail,
-  removeAdminEmail
+  removeAdminEmail,
+  submitAdminRequest,
+  fetchAdminRequests,
+  approveAdminRequest,
+  rejectAdminRequest,
+  AdminRequestRecord
 } from '../firebase';
 import { ParticipantRecord, FOODS, FOOD_DETAILS, SENSORY_CATEGORIES } from '../types';
 import {
@@ -42,7 +46,15 @@ import {
   UserPlus,
   AlertTriangle,
   ShieldCheck,
-  Plus
+  BarChart3,
+  PieChart,
+  TrendingUp,
+  Award,
+  FileText,
+  UserCheck,
+  Bell,
+  Clock,
+  Check
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -89,8 +101,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedRecord, setSelectedRecord] = useState<ParticipantRecord | null>(null);
 
-  // Pengurusan email penyelidik tambahan
+  // Tab navigation: Participants table vs Automated Analytics
+  const [adminTab, setAdminTab] = useState<'participants' | 'analytics'>('participants');
+
+  // Pengurusan email penyelidik & permohonan automatik
   const [adminEmails, setAdminEmails] = useState<string[]>([PRIMARY_ADMIN_EMAIL]);
+  const [pendingRequests, setPendingRequests] = useState<AdminRequestRecord[]>([]);
+  const [isPendingApproval, setIsPendingApproval] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
   const [newAdminEmail, setNewAdminEmail] = useState<string>('');
   const [isSavingAdmin, setIsSavingAdmin] = useState<boolean>(false);
@@ -101,15 +118,54 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
+    const unsubscribe = auth.onAuthStateChanged(async user => {
       setCurrentUser(user);
       if (user && !user.isAnonymous) {
-        fetchParticipants();
-        loadAdmins();
+        checkUserStatusAndLoad(user);
+      } else {
+        setIsPendingApproval(false);
       }
     });
     return () => unsubscribe();
   }, []);
+
+  const checkUserStatusAndLoad = async (user: User) => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const list = await fetchAdminEmails();
+      setAdminEmails(list);
+
+      const userEmail = (user.email || '').toLowerCase().trim();
+      const isApproved = list.map(e => e.toLowerCase().trim()).includes(userEmail);
+
+      if (!isApproved) {
+        // Automatically submit request so it immediately appears in admin's portal
+        await submitAdminRequest(userEmail, user.displayName || '', user.photoURL || '');
+        setIsPendingApproval(true);
+        setIsLoading(false);
+      } else {
+        setIsPendingApproval(false);
+        await Promise.all([
+          fetchParticipants(),
+          loadPendingRequests()
+        ]);
+      }
+    } catch (err: any) {
+      console.warn('Status check warning:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadPendingRequests = async () => {
+    try {
+      const reqs = await fetchAdminRequests();
+      setPendingRequests(reqs);
+    } catch (e) {
+      console.warn('Could not load admin requests:', e);
+    }
+  };
 
   const loadAdmins = async () => {
     try {
@@ -143,7 +199,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
       } catch (e: any) {
         const userEmail = auth.currentUser?.email || 'tidak dikenali';
         setErrorMessage(
-          `Akses ditolak: Akaun "${userEmail}" belum didaftarkan sebagai penyelidik. Sila log masuk dengan "${PRIMARY_ADMIN_EMAIL}" untuk memberi kebenaran kepada akaun ini.`
+          `Akses ditolak: Akaun "${userEmail}" belum diluluskan sebagai penyelidik. Sila minta Penyelidik Utama ("${PRIMARY_ADMIN_EMAIL}") untuk menekan butang 'Luluskan' bagi akaun ini.`
         );
       }
     } finally {
@@ -155,9 +211,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
     setErrorMessage('');
     try {
       const provider = new GoogleAuthProvider();
-      // Prompt user to select account if switching
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      const cred = await signInWithPopup(auth, provider);
+      if (cred.user) {
+        await checkUserStatusAndLoad(cred.user);
+      }
     } catch (err: any) {
       console.error(err);
       setErrorMessage(`Log masuk Google gagal: ${err.message || 'Sila cuba lagi'}`);
@@ -167,6 +225,30 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
   const handleSignOut = async () => {
     await signOut(auth);
     setParticipants([]);
+    setIsPendingApproval(false);
+  };
+
+  const handleApproveRequest = async (targetEmail: string) => {
+    try {
+      await approveAdminRequest(targetEmail, currentUser?.email || PRIMARY_ADMIN_EMAIL);
+      setAdminEmails(prev => [...prev, targetEmail.toLowerCase().trim()]);
+      setPendingRequests(prev => prev.filter(r => r.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim()));
+      alert(`Akaun "${targetEmail}" telah berjaya diluluskan sebagai penyelidik!`);
+    } catch (e: any) {
+      console.error('Approve error:', e);
+      alert(`Ralat meluluskan: ${e.message || e}`);
+    }
+  };
+
+  const handleRejectRequest = async (targetEmail: string) => {
+    const conf = window.confirm(`Padam permohonan akses penyelidik daripada ${targetEmail}?`);
+    if (!conf) return;
+    try {
+      await rejectAdminRequest(targetEmail);
+      setPendingRequests(prev => prev.filter(r => r.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim()));
+    } catch (e: any) {
+      alert(`Ralat memadam permohonan: ${e.message || e}`);
+    }
   };
 
   const handleResetCounter = async () => {
@@ -194,7 +276,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
     }
   };
 
-  // Padam satu rekod peserta
   const handleDeleteSingle = async (item: ParticipantRecord) => {
     if (!item._uid) return;
     const confirmed = window.confirm(
@@ -217,7 +298,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
     }
   };
 
-  // Padam SEMUA data ujian peserta
   const handleConfirmDeleteAll = async () => {
     if (participants.length === 0) return;
     setIsDeleting(true);
@@ -247,7 +327,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
     }
   };
 
-  // Tambah email penyelidik baharu
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = newAdminEmail.toLowerCase().trim();
@@ -265,7 +344,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
       await addAdminEmail(clean, currentUser?.email || PRIMARY_ADMIN_EMAIL);
       setAdminEmails(prev => [...prev, clean]);
       setNewAdminEmail('');
-      alert(`Email "${clean}" telah berjaya didaftarkan sebagai penyelidik! Penyelidik ini kini boleh log masuk portal.`);
+      alert(`Email "${clean}" telah berjaya didaftarkan sebagai penyelidik!`);
     } catch (err: any) {
       console.error('Add admin error:', err);
       alert(`Ralat mendaftarkan email penyelidik: ${err.message || err}`);
@@ -274,7 +353,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
     }
   };
 
-  // Buang email penyelidik
   const handleRemoveAdmin = async (targetEmail: string) => {
     if (targetEmail.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase()) {
       alert('Email penyelidik utama tidak boleh dipadam.');
@@ -351,7 +429,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
       rows.push(rowValues.map(escapeCsvCell).join(','));
     });
 
-    // UTF-8 BOM (\uFEFF) for Microsoft Excel compatibility
     const csvContent = '\uFEFF' + rows.join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -371,6 +448,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
   const preDoneCount = participants.filter(p => p.preSubmittedAt).length;
   const unlockedCount = participants.filter(p => p.unlockedAt).length;
   const postDoneCount = participants.filter(p => p.postSubmittedAt).length;
+  const completionRate = totalCount > 0 ? Math.round((postDoneCount / totalCount) * 100) : 0;
+
+  // Automated Analytics computations
+  const ageDistribution: Record<string, number> = {};
+  const programmeDistribution: Record<string, number> = {};
+  const priorLearningDistribution: Record<string, number> = {};
+  const collectedWordsFrequency: Record<string, string[]> = { rupa: [], aroma: [], rasa: [], tekstur: [], bunyi: [] };
+  const reflectionsSummary: Record<string, string[]> = { q31: [], q32: [], q33: [], q34: [] };
+
+  participants.forEach(p => {
+    const prof = p.profile || {};
+    if (prof.q3) ageDistribution[prof.q3] = (ageDistribution[prof.q3] || 0) + 1;
+    if (prof.q5) programmeDistribution[prof.q5] = (programmeDistribution[prof.q5] || 0) + 1;
+    if (prof.q7) priorLearningDistribution[prof.q7] = (priorLearningDistribution[prof.q7] || 0) + 1;
+
+    if (p.words) {
+      SENSORY_CATEGORIES.forEach(c => {
+        const w = (p.words?.[c.key] || '').trim().toLowerCase();
+        if (w.length >= 2) {
+          collectedWordsFrequency[c.key].push(w);
+        }
+      });
+    }
+
+    if (p.reflection) {
+      ['q31', 'q32', 'q33', 'q34'].forEach(qKey => {
+        const ans = (p.reflection?.[qKey] || '').trim();
+        if (ans) reflectionsSummary[qKey].push(ans);
+      });
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -386,15 +494,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
             Kembali ke Aplikasi Peserta
           </button>
           <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-[#12302B]">
-            Portal Penyelidik (Admin)
+            Portal Penyelidik (Admin) & Analisis Otomatis
           </h1>
         </div>
 
-        {isGoogleUser && (
+        {isGoogleUser && !isPendingApproval && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={fetchParticipants}
+              onClick={() => {
+                fetchParticipants();
+                loadPendingRequests();
+                loadAdmins();
+              }}
               disabled={isLoading || isDeleting}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#CBD7CE] bg-white text-xs font-bold text-[#12302B] hover:bg-[#EDF1EA] transition cursor-pointer"
             >
@@ -405,11 +517,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
             <button
               type="button"
               onClick={() => setShowAdminModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#12302B] bg-[#12302B]/5 text-xs font-bold text-[#12302B] hover:bg-[#12302B]/10 transition cursor-pointer"
-              title="Urus dan tambah akaun email penyelidik lain"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#12302B] bg-[#12302B]/5 text-xs font-bold text-[#12302B] hover:bg-[#12302B]/10 transition cursor-pointer relative"
             >
               <UserPlus className="w-3.5 h-3.5 text-[#1F7A57]" />
-              Urus Penyelidik ({adminEmails.length})
+              <span>Urus Penyelidik ({adminEmails.length})</span>
+              {pendingRequests.length > 0 && (
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse absolute -top-1 -right-1" />
+              )}
             </button>
 
             <button
@@ -417,7 +531,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
               onClick={() => setShowDeleteAllModal(true)}
               disabled={participants.length === 0 || isDeleting}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-300 bg-red-50 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 cursor-pointer"
-              title="Padam semua data peserta ujian dan reset kaunter"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Padam Semua Data Ujian
@@ -445,8 +558,62 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
         )}
       </div>
 
-      {/* Auth State */}
-      {!isGoogleUser ? (
+      {/* STATE 1: PENDING APPROVAL SCREEN (when unauthorized Google account signs in) */}
+      {isPendingApproval && currentUser ? (
+        <div className="max-w-lg mx-auto bg-[#F9FBF7] border border-[#CBD7CE] rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-md">
+          <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto">
+            <Clock className="w-8 h-8 animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider">
+              Menunggu Kelulusan / Pending
+            </span>
+            <h2 className="text-xl sm:text-2xl font-extrabold font-display text-[#12302B]">
+              Permohonan Akses Telah Dihantar
+            </h2>
+            <p className="text-xs sm:text-sm text-[#4F6660] leading-relaxed">
+              Akaun Google anda <strong className="text-[#12302B] font-mono">{currentUser.email}</strong> telah berjaya direkodkan secara automatik ke dalam senarai permohonan portal penyelidik ini.
+            </p>
+          </div>
+
+          <div className="p-4 bg-white rounded-2xl border border-[#CBD7CE] text-left text-xs space-y-2 text-[#4F6660]">
+            <div className="font-bold text-[#12302B] flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[#C8402B]" />
+              Langkah Seterusnya:
+            </div>
+            <p>
+              Email anda telah pun muncul di portal Penyelidik Utama (<b>{PRIMARY_ADMIN_EMAIL}</b>). Beliau hanya perlu menekan butang <b>"Luluskan Sebagai Penyelidik"</b> untuk mengaktifkan akses anda.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => checkUserStatusAndLoad(currentUser)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#12302B] text-white text-xs font-bold hover:bg-[#1f4a43] transition cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Semak Semula Kelulusan
+            </button>
+            <button
+              type="button"
+              onClick={handleSignInGoogle}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#CBD7CE] bg-white text-xs font-bold text-[#4F6660] hover:bg-[#EDF1EA] transition cursor-pointer"
+            >
+              Tukar Akaun Google
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-xs font-bold text-red-600 hover:bg-red-100 transition cursor-pointer"
+            >
+              Log Keluar
+            </button>
+          </div>
+        </div>
+      ) : !isGoogleUser ? (
+        /* STATE 2: NOT SIGNED IN */
         <div className="max-w-md mx-auto bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm">
           <div className="p-3 bg-[#EDF1EA] text-[#12302B] rounded-full inline-flex">
             <Users className="w-8 h-8" />
@@ -455,7 +622,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
             Akses Penyelidikan
           </h2>
           <p className="text-xs sm:text-sm text-[#4F6660]">
-            Log masuk dengan akaun Google penyelidik yang diberi kebenaran untuk melihat senarai peserta, jawapan, mengurus akaun penyelidik, dan memuat turun fail CSV.
+            Log masuk dengan mana-mana akaun Google. Sekiranya akaun anda belum disahkan, permohonan akan dihantar secara automatik kepada penyelidik utama untuk diluluskan dengan satu klik.
           </p>
 
           {errorMessage && (
@@ -474,13 +641,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
           </button>
         </div>
       ) : (
+        /* STATE 3: FULL ADMIN DASHBOARD */
         <div className="space-y-6">
           {/* User info banner */}
           <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-900">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
               <span>
-                Log masuk sebagai penyelidik: <b>{currentUser.email}</b>
+                Penyelidik Disahkan: <b>{currentUser.email}</b>
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -491,9 +659,62 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
               >
                 Tukar Akaun Google
               </button>
-              <span className="font-semibold text-emerald-700">Firestore Rules: Aktif</span>
+              <span className="font-semibold text-emerald-700">Akses: Pentadbir Diluluskan</span>
             </div>
           </div>
+
+          {/* Pending Researcher Requests Alert Banner */}
+          {pendingRequests.length > 0 && (
+            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-display font-extrabold text-sm sm:text-base text-amber-950">
+                  <Bell className="w-5 h-5 text-amber-600 animate-bounce" />
+                  <span>Permohonan Akses Penyelidik Baharu ({pendingRequests.length})</span>
+                </div>
+                <span className="text-xs text-amber-800 font-semibold">
+                  Klik satu butang sahaja untuk luluskan:
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {pendingRequests.map(req => (
+                  <div
+                    key={req.email}
+                    className="p-3 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-3 shadow-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs text-[#12302B] truncate">
+                        {req.displayName || req.email.split('@')[0]}
+                      </div>
+                      <div className="font-mono text-[11px] text-[#4F6660] truncate">{req.email}</div>
+                      <div className="text-[10px] text-gray-400">
+                        {req.requestedAt ? new Date(req.requestedAt).toLocaleString('ms-MY', { dateStyle: 'short', timeStyle: 'short' }) : 'Baru sahaja'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveRequest(req.email)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1F7A57] text-white text-xs font-bold hover:bg-[#186044] transition shadow-xs cursor-pointer"
+                        title="Luluskan email ini menjadi penyelidik"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Luluskan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectRequest(req.email)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                        title="Tolak permohonan"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
@@ -562,240 +783,433 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBackToApp }) => {
             </div>
           </div>
 
-          {errorMessage && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl space-y-2" role="alert">
-              <div className="font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>Ralat Akses Firestore</span>
+          {/* Admin Tab Navigation: Participants vs Automated Analytics */}
+          <div className="flex items-center gap-2 border-b border-[#CBD7CE] pb-3">
+            <button
+              type="button"
+              onClick={() => setAdminTab('participants')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                adminTab === 'participants'
+                  ? 'bg-[#12302B] text-white shadow-sm'
+                  : 'bg-white border border-[#CBD7CE] text-[#4F6660] hover:bg-[#EDF1EA]'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Senarai Data Peserta ({totalCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdminTab('analytics')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer ${
+                adminTab === 'analytics'
+                  ? 'bg-[#12302B] text-white shadow-sm'
+                  : 'bg-white border border-[#CBD7CE] text-[#4F6660] hover:bg-[#EDF1EA]'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 text-[#E3A21A]" />
+              Analisis Data Otomatis (Insights) 📊
+            </button>
+          </div>
+
+          {/* TAB 1: PARTICIPANTS TABLE */}
+          {adminTab === 'participants' && (
+            <div className="bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-display font-bold text-base text-[#12302B]">
+                  Rekod Jawapan Peserta Keseluruhan
+                </h3>
+                <span className="text-xs text-[#4F6660]">
+                  Klik pada butang <b>"Lihat"</b> untuk menyemak butiran jawapan lengkap peserta.
+                </span>
               </div>
-              <p>{errorMessage}</p>
-              <div className="pt-1 flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSignInGoogle}
-                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-bold text-xs hover:bg-red-700"
-                >
-                  Tukar ke Akaun Google Lain
-                </button>
-              </div>
+
+              {isLoading ? (
+                <div className="py-12 text-center text-[#4F6660] space-y-2">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#12302B]" />
+                  <p className="text-xs">Memuatkan data peserta daripada Firestore...</p>
+                </div>
+              ) : participants.length === 0 ? (
+                <div className="py-16 text-center text-[#4F6660] space-y-2">
+                  <Users className="w-8 h-8 mx-auto opacity-40" />
+                  <p className="text-sm font-semibold">Tiada data peserta dijumpai.</p>
+                  <p className="text-xs">Data peserta yang menyertai kajian akan dipaparkan di sini secara langsung.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-[#EDF1EA] text-[#12302B] border-b border-[#CBD7CE]">
+                        <th className="p-3 font-bold">Kod</th>
+                        <th className="p-3 font-bold">Tarikh Mula</th>
+                        <th className="p-3 font-bold">Status Fasa</th>
+                        <th className="p-3 font-bold">Umur / Program</th>
+                        <th className="p-3 font-bold">Masa Teroka</th>
+                        <th className="p-3 font-bold text-center">Tindakan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#CBD7CE]/60">
+                      {participants.map(p => {
+                        const badge = stageBadge(p);
+                        const exploreMins = calculateMinutes(p.exploreStartedAt, p.unlockedAt);
+                        const prof = p.profile || {};
+                        return (
+                          <tr key={p._uid || p.code} className="hover:bg-white/80 transition">
+                            <td className="p-3 font-mono font-bold text-[#12302B]">{p.code}</td>
+                            <td className="p-3 text-[#4F6660]">{formatIso(p.createdAt)}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>
+                                {badge.label}
+                              </span>
+                            </td>
+                            <td className="p-3 text-[#4F6660]">
+                              <div>{prof.q3 || '—'}</div>
+                              <div className="text-[10px] truncate max-w-[180px]">{prof.q5 || '—'}</div>
+                            </td>
+                            <td className="p-3 font-mono text-[#4F6660]">{exploreMins} min</td>
+                            <td className="p-3 text-center space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecord(p)}
+                                className="px-2.5 py-1 bg-[#12302B] text-white rounded-lg font-bold text-[11px] hover:bg-[#1f4a43] transition cursor-pointer"
+                              >
+                                Lihat Jawapan
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSingle(p)}
+                                className="px-2 py-1 bg-red-100 text-red-700 rounded-lg font-bold text-[11px] hover:bg-red-200 transition cursor-pointer"
+                                title="Padam rekod ini"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Table */}
-          <div className="bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-[#EDF1EA] text-[#4F6660] text-xs font-bold uppercase tracking-wider border-b border-[#CBD7CE]">
-                  <tr>
-                    <th className="py-3 px-4">Kod</th>
-                    <th className="py-3 px-4">Peringkat</th>
-                    <th className="py-3 px-4">Masa Mula</th>
-                    <th className="py-3 px-4">Pra Dihantar</th>
-                    <th className="py-3 px-4">Masa Meneroka (Min)</th>
-                    <th className="py-3 px-4">Pasca Dihantar</th>
-                    <th className="py-3 px-4">Kosa Kata</th>
-                    <th className="py-3 px-4 text-right">Tindakan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#CBD7CE]/70">
-                  {participants.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-sm text-[#4F6660]">
-                        {isLoading ? 'Memuatkan senarai peserta…' : 'Tiada rekod peserta dalam Firestore. Semua data ujian telah dikosongkan.'}
-                      </td>
-                    </tr>
+          {/* TAB 2: AUTOMATED ANALYTICS & INSIGHTS DASHBOARD */}
+          {adminTab === 'analytics' && (
+            <div className="space-y-6">
+              {/* Executive Summary Card */}
+              <div className="bg-gradient-to-r from-[#12302B] to-[#1F7A57] text-white rounded-3xl p-6 sm:p-8 shadow-lg space-y-4">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-bold uppercase tracking-wider text-emerald-200">
+                  <BarChart3 className="w-3.5 h-3.5 text-[#E3A21A]" />
+                  Rumusan Analisis Automatik (Automated Insights)
+                </div>
+                <h3 className="text-xl sm:text-2xl font-extrabold font-display">
+                  Laporan Ringkasan Kajian Kosa Kata Sensori SENSAVOUR
+                </h3>
+                <p className="text-xs sm:text-sm text-emerald-100 max-w-3xl leading-relaxed">
+                  Analisis di bawah dijana secara automatik daripada pangkalan data Firestore. Sebanyak <b>{totalCount} peserta</b> telah berdaftar, dengan kadar penyelesaian penuh pasca-ujian sebanyak <b>{completionRate}%</b>.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-xs border border-white/10 space-y-1">
+                    <div className="text-xs text-emerald-200 uppercase font-bold">Kadar Penyiapan Kajian</div>
+                    <div className="text-2xl sm:text-3xl font-extrabold font-display">{completionRate}%</div>
+                    <div className="text-[11px] text-emerald-100">{postDoneCount} daripada {totalCount} siap sepenuhnya</div>
+                  </div>
+                  <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-xs border border-white/10 space-y-1">
+                    <div className="text-xs text-emerald-200 uppercase font-bold">Purata Masa Meneroka</div>
+                    <div className="text-2xl sm:text-3xl font-extrabold font-display">
+                      {participants.length > 0 ? (
+                        (participants.reduce((acc, p) => {
+                          const mins = parseFloat(calculateMinutes(p.exploreStartedAt, p.unlockedAt));
+                          return acc + (isNaN(mins) ? 0 : mins);
+                        }, 0) / (totalCount || 1)).toFixed(1)
+                      ) : '0.0'} min
+                    </div>
+                    <div className="text-[11px] text-emerald-100">Tempoh purata roda deria</div>
+                  </div>
+                  <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-xs border border-white/10 space-y-1">
+                    <div className="text-xs text-emerald-200 uppercase font-bold">Kosa Kata Terkumpul</div>
+                    <div className="text-2xl sm:text-3xl font-extrabold font-display">
+                      {Object.values(collectedWordsFrequency).reduce((acc, arr) => acc + arr.length, 0)} kata
+                    </div>
+                    <div className="text-[11px] text-emerald-100">Direkod merentasi 5 kategori</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Demographics & Background Breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Age & Programme */}
+                <div className="bg-white border border-[#CBD7CE] rounded-3xl p-6 shadow-sm space-y-4">
+                  <h4 className="font-display font-extrabold text-base text-[#12302B] flex items-center gap-2">
+                    <PieChart className="w-5 h-5 text-[#C8402B]" />
+                    Taburan Program Pengajian Peserta
+                  </h4>
+                  {Object.keys(programmeDistribution).length === 0 ? (
+                    <p className="text-xs text-[#4F6660] italic">Belum ada data demografi program.</p>
                   ) : (
-                    participants.map((item, idx) => {
-                      const badge = stageBadge(item);
-                      const wordsCount = item.words ? Object.keys(item.words).length : 0;
-                      return (
-                        <tr key={item._uid || idx} className="hover:bg-[#EDF1EA]/50 transition">
-                          <td className="py-3 px-4 font-mono font-bold text-[#12302B]">
-                            {item.code}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${badge.bg} ${badge.text}`}>
-                              {badge.label}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-[#4F6660] whitespace-nowrap">
-                            {formatIso(item.createdAt)}
-                          </td>
-                          <td className="py-3 px-4 text-[#4F6660] whitespace-nowrap">
-                            {formatIso(item.preSubmittedAt)}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-[#12302B]">
-                            {calculateMinutes(item.exploreStartedAt, item.unlockedAt)} min
-                          </td>
-                          <td className="py-3 px-4 text-[#4F6660] whitespace-nowrap">
-                            {formatIso(item.postSubmittedAt)}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`font-mono font-bold ${wordsCount >= 5 ? 'text-[#1F7A57]' : 'text-[#4F6660]'}`}>
-                              {wordsCount} / 5
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRecord(item)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#CBD7CE] bg-white text-xs font-semibold text-[#12302B] hover:bg-[#EDF1EA] transition cursor-pointer"
-                                title="Lihat butiran jawapan"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-[#4F6660]" />
-                                Lihat
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSingle(item)}
-                                disabled={isDeleting}
-                                className="inline-flex items-center p-1 rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 transition cursor-pointer"
-                                title="Padam rekod peserta ini"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                    <div className="space-y-3">
+                      {Object.entries(programmeDistribution).map(([prog, count]) => {
+                        const pct = Math.round((count / totalCount) * 100);
+                        return (
+                          <div key={prog} className="space-y-1">
+                            <div className="flex justify-between text-xs font-bold text-[#12302B]">
+                              <span className="truncate max-w-[280px]" title={prog}>{prog}</span>
+                              <span>{count} ({pct}%)</span>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                            <div className="w-full bg-[#EDF1EA] h-2.5 rounded-full overflow-hidden">
+                              <div className="bg-[#1F7A57] h-full rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </div>
+
+                {/* Prior Sensory Learning (Q7) */}
+                <div className="bg-white border border-[#CBD7CE] rounded-3xl p-6 shadow-sm space-y-4">
+                  <h4 className="font-display font-extrabold text-base text-[#12302B] flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-[#1F7A57]" />
+                    Pengalaman Pembelajaran Sensori Terdahulu (Q7)
+                  </h4>
+                  {Object.keys(priorLearningDistribution).length === 0 ? (
+                    <p className="text-xs text-[#4F6660] italic">Belum ada data pengalaman sensori.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(priorLearningDistribution).map(([exp, count]) => {
+                        const pct = Math.round((count / totalCount) * 100);
+                        return (
+                          <div key={exp} className="space-y-1">
+                            <div className="flex justify-between text-xs font-bold text-[#12302B]">
+                              <span className="truncate max-w-[280px]" title={exp}>{exp}</span>
+                              <span>{count} ({pct}%)</span>
+                            </div>
+                            <div className="w-full bg-[#EDF1EA] h-2.5 rounded-full overflow-hidden">
+                              <div className="bg-[#C8402B] h-full rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Collected Sensory Vocabulary Frequency Analysis */}
+              <div className="bg-white border border-[#CBD7CE] rounded-3xl p-6 shadow-sm space-y-4">
+                <h4 className="font-display font-extrabold text-base text-[#12302B] flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-[#E3A21A]" />
+                  Analisis Kosa Kata Sensori Terkumpul (Rupa, Aroma, Rasa, Tekstur, Bunyi)
+                </h4>
+                <p className="text-xs text-[#4F6660]">
+                  Senarai perkataan unik yang paling kerap dikumpul oleh peserta semasa meneroka Roda Sensori SENSAVOUR:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                  {SENSORY_CATEGORIES.map(cat => {
+                    const wordsList = collectedWordsFrequency[cat.key] || [];
+                    const counts: Record<string, number> = {};
+                    wordsList.forEach(w => { counts[w] = (counts[w] || 0) + 1; });
+                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+                    return (
+                      <div key={cat.key} className="bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl p-4 space-y-2">
+                        <div className="font-display font-bold text-xs text-[#12302B] pb-1 border-b border-[#CBD7CE]" style={{ color: cat.color }}>
+                          {cat.name} ({wordsList.length} kata)
+                        </div>
+                        {sorted.length === 0 ? (
+                          <div className="text-[11px] text-[#4F6660] italic">Tiada data kata</div>
+                        ) : (
+                          <ul className="space-y-1 text-xs">
+                            {sorted.map(([word, freq]) => (
+                              <li key={word} className="flex justify-between items-center bg-white px-2 py-1 rounded border border-[#CBD7CE]/60">
+                                <span className="font-medium text-[#12302B] capitalize">{word}</span>
+                                <span className="font-mono text-[10px] text-[#1F7A57] font-bold">({freq})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Qualitative Reflection Synthesis */}
+              <div className="bg-white border border-[#CBD7CE] rounded-3xl p-6 shadow-sm space-y-4">
+                <h4 className="font-display font-extrabold text-base text-[#12302B] flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#12302B]" />
+                  Rumusan Refleksi Kualitatif Peserta (Q31 - Q34)
+                </h4>
+                <p className="text-xs text-[#4F6660]">
+                  Sampel jawapan refleksi daripada peserta yang telah menyelesaikan kajian:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl space-y-2">
+                    <div className="font-bold text-[#12302B]">Q31: Pengaruh SENSAVOUR terhadap Huraian</div>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                      {reflectionsSummary.q31.length === 0 ? (
+                        <p className="text-[#4F6660] italic">Belum ada jawapan refleksi.</p>
+                      ) : (
+                        reflectionsSummary.q31.map((ans, idx) => (
+                          <div key={idx} className="bg-white p-2.5 rounded-xl border border-[#CBD7CE]/80 text-[#4F6660] italic">
+                            "{ans}"
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-[#F9FBF7] border border-[#CBD7CE] rounded-2xl space-y-2">
+                    <div className="font-bold text-[#12302B]">Q32: Kosa Kata Baru Dipelajari</div>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                      {reflectionsSummary.q32.length === 0 ? (
+                        <p className="text-[#4F6660] italic">Belum ada jawapan refleksi.</p>
+                      ) : (
+                        reflectionsSummary.q32.map((ans, idx) => (
+                          <div key={idx} className="bg-white p-2.5 rounded-xl border border-[#CBD7CE]/80 text-[#4F6660] italic">
+                            "{ans}"
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Modal Pengurusan Penyelidik (Admin Emails) */}
+      {/* Admin Modal for Managing Researchers and Pending Requests */}
       {showAdminModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#CBD7CE] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-[#CBD7CE] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#CBD7CE] pb-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#1F7A57]" />
-                <h3 className="text-lg font-bold font-display text-[#12302B]">
-                  Pengurusan Akaun Penyelidik
-                </h3>
-              </div>
+              <h3 className="text-lg font-bold font-display text-[#12302B] flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-[#1F7A57]" />
+                Pengurusan Akaun Penyelidik
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowAdminModal(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <p className="text-xs text-[#4F6660]">
-              Penyelidik yang didaftarkan di sini boleh log masuk portal menggunakan akaun Google mereka untuk melihat semua jawapan dan memuat turun data CSV.
-            </p>
+            {/* Section 1: Pending Access Requests with 1-Click Approve */}
+            {pendingRequests.length > 0 && (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-3">
+                <div className="font-bold text-xs text-amber-950 flex items-center gap-1.5">
+                  <Bell className="w-4 h-4 text-amber-600" />
+                  Permohonan Akses Baharu (Klik untuk Luluskan):
+                </div>
+                <div className="space-y-2">
+                  {pendingRequests.map(req => (
+                    <div key={req.email} className="bg-white p-2.5 rounded-xl border border-amber-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-[#12302B] truncate">{req.displayName || req.email.split('@')[0]}</div>
+                        <div className="font-mono text-[11px] text-[#4F6660] truncate">{req.email}</div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleApproveRequest(req.email)}
+                          className="px-2.5 py-1 bg-[#1F7A57] text-white rounded-lg text-xs font-bold hover:bg-[#186044] transition cursor-pointer"
+                        >
+                          Luluskan
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectRequest(req.email)}
+                          className="p-1 text-gray-400 hover:text-red-600 cursor-pointer"
+                          title="Tolak"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Form tambah email baru */}
-            <form onSubmit={handleAddAdmin} className="space-y-2">
+            {/* Section 2: Active Approved Admins */}
+            <div className="space-y-2">
               <label className="block text-xs font-bold text-[#12302B]">
-                Tambah Email Penyelidik Baharu:
+                Senarai Penyelidik Berdaftar Semasa:
+              </label>
+              <ul className="space-y-1.5 max-h-40 overflow-y-auto text-xs font-mono">
+                {adminEmails.map(email => (
+                  <li key={email} className="flex items-center justify-between p-2 bg-[#EDF1EA] rounded-xl">
+                    <span className="truncate mr-2">{email} {email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase() ? '(Utama)' : ''}</span>
+                    {email.toLowerCase() !== PRIMARY_ADMIN_EMAIL.toLowerCase() && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAdmin(email)}
+                        className="text-red-600 hover:text-red-800 font-sans font-bold text-[11px] cursor-pointer shrink-0"
+                      >
+                        Buang
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Section 3: Manual Add Email (Optional) */}
+            <form onSubmit={handleAddAdmin} className="space-y-3 pt-3 border-t border-[#CBD7CE]">
+              <label className="block text-xs font-bold text-[#12302B]">
+                Tambah Email Secara Manual (Jika belum log masuk):
               </label>
               <div className="flex gap-2">
                 <input
                   type="email"
+                  required
+                  placeholder="penyelidik@gmail.com"
                   value={newAdminEmail}
                   onChange={e => setNewAdminEmail(e.target.value)}
-                  placeholder="contoh: rakan.penyelidik@gmail.com"
-                  className="flex-1 px-3 py-2 text-xs border border-[#CBD7CE] rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#1F7A57]"
-                  required
+                  className="flex-1 px-3 py-2 border border-[#CBD7CE] rounded-xl text-xs focus:ring-2 focus:ring-[#C8402B] outline-hidden"
                 />
                 <button
                   type="submit"
-                  disabled={isSavingAdmin || !newAdminEmail.trim()}
-                  className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-[#1F7A57] text-white text-xs font-bold hover:bg-[#165a40] transition disabled:opacity-50 cursor-pointer"
+                  disabled={isSavingAdmin}
+                  className="px-4 py-2 bg-[#1F7A57] text-white rounded-xl text-xs font-bold hover:bg-[#186044] transition cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  {isSavingAdmin ? 'Menyimpan…' : 'Daftar'}
+                  {isSavingAdmin ? 'Menyimpan…' : 'Tambah'}
                 </button>
               </div>
             </form>
-
-            {/* Senarai email berdaftar */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#12302B]">
-                Senarai Penyelidik Dibenarkan ({adminEmails.length}):
-              </label>
-              <div className="border border-[#CBD7CE] rounded-xl divide-y divide-[#CBD7CE]/60 max-h-48 overflow-y-auto">
-                {adminEmails.map(email => {
-                  const isPrimary = email.toLowerCase() === PRIMARY_ADMIN_EMAIL.toLowerCase();
-                  return (
-                    <div key={email} className="flex items-center justify-between p-2.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[#12302B]">{email}</span>
-                        {isPrimary && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
-                            Utama
-                          </span>
-                        )}
-                      </div>
-                      {!isPrimary && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAdmin(email)}
-                          className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 cursor-pointer"
-                          title="Padam akses penyelidik ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowAdminModal(false)}
-                className="px-4 py-2 rounded-xl bg-[#12302B] text-white text-xs font-bold hover:bg-[#1f4a43] cursor-pointer"
-              >
-                Selesai
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Modal Padam Semua Data Ujian */}
+      {/* Delete All Confirmation Modal */}
       {showDeleteAllModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-[#CBD7CE] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-red-600">
-              <div className="p-2.5 bg-red-100 rounded-xl">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
+              <AlertTriangle className="w-6 h-6 shrink-0" />
               <h3 className="text-lg font-bold font-display text-[#12302B]">
                 Padam Semua Data Ujian?
               </h3>
             </div>
-
-            <p className="text-xs sm:text-sm text-[#4F6660] leading-relaxed">
-              Adakah anda pasti ingin memadam kesemua <b>{participants.length} rekod peserta</b> daripada Firestore? Tindakan ini <b>kekal</b> dan data tidak boleh dipulihkan selepas dipadam.
+            <p className="text-xs text-[#4F6660] leading-relaxed">
+              Anda akan memadam <b>{participants.length} rekod peserta</b> daripada pangkalan data Firestore. Tindakan ini tidak boleh diundur.
             </p>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <label className="flex items-start gap-2.5 text-xs text-amber-900 cursor-pointer">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-red-900">
                 <input
                   type="checkbox"
                   checked={resetCounterOnDelete}
                   onChange={e => setResetCounterOnDelete(e.target.checked)}
-                  className="mt-0.5 rounded text-[#C8402B] focus:ring-[#C8402B]"
+                  className="rounded border-red-300 text-red-600 focus:ring-red-500"
                 />
-                <span>
-                  <b>Set semula kaunter giliran ke 0.</b>
-                  <br />
-                  <span className="text-amber-800 text-[11px]">
-                    Peserta seterusnya yang menyertai kajian akan bermula semula dengan kod <b>S001</b>.
-                  </span>
-                </span>
+                Tetap semula kaunter giliran ke 0 (Peserta seterusnya akan bermula dengan S001)
               </label>
             </div>
 
