@@ -33,12 +33,17 @@ import { QuestionWizard } from './components/QuestionWizard';
 import { ExploreView } from './components/ExploreView';
 import { DoneView } from './components/DoneView';
 import { AdminView } from './components/AdminView';
+import { StandaloneSensavourView } from './components/StandaloneSensavourView';
 
-import { Shield, Loader2, AlertCircle } from 'lucide-react';
+import { Shield, Loader2, AlertCircle, Sparkles, Compass } from 'lucide-react';
 
 export default function App() {
   const [isAdminView, setIsAdminView] = useState<boolean>(() => {
     return window.location.search.includes('admin');
+  });
+
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(() => {
+    return window.location.search.includes('mode=sensavour') || window.location.search.includes('standalone');
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -171,6 +176,20 @@ export default function App() {
     if (participant.postSubmittedAt) pts += 20;
 
     return Math.min(100, pts);
+  };
+
+  const handleToggleStandalone = (enable: boolean) => {
+    setIsStandaloneMode(enable);
+    setIsAdminView(false);
+    const url = new URL(window.location.href);
+    if (enable) {
+      url.searchParams.set('mode', 'sensavour');
+      url.searchParams.delete('admin');
+    } else {
+      url.searchParams.delete('mode');
+      url.searchParams.delete('standalone');
+    }
+    window.history.pushState({}, '', url.toString());
   };
 
   // Handler: Start participant session with automatic running number or manual code
@@ -461,10 +480,30 @@ export default function App() {
               </>
             )}
 
+            {/* Standalone SENSAVOUR Toggle Button */}
+            <button
+              type="button"
+              onClick={() => handleToggleStandalone(!isStandaloneMode)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                isStandaloneMode
+                  ? 'bg-[#12302B] text-white hover:bg-[#1a443d]'
+                  : 'bg-emerald-100/90 border border-emerald-300 text-emerald-950 hover:bg-emerald-200'
+              }`}
+              title={isStandaloneMode ? 'Kembali ke mod soalan kajian' : 'Buka SENSAVOUR Standalone tanpa sebarang soalan'}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#E3A21A]" />
+              <span>
+                {isStandaloneMode ? 'Buka Mod Kajian' : 'SENSAVOUR Standalone'}
+              </span>
+            </button>
+
             {/* Admin Toggle Button */}
             <button
               type="button"
-              onClick={() => setIsAdminView(prev => !prev)}
+              onClick={() => {
+                setIsAdminView(prev => !prev);
+                if (!isAdminView) setIsStandaloneMode(false);
+              }}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[#CBD7CE] bg-white text-xs font-bold text-[#4F6660] hover:text-[#12302B] hover:bg-white/80 transition cursor-pointer"
             >
               <Shield className="w-3.5 h-3.5 text-[#C8402B]" />
@@ -480,6 +519,8 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
         {isAdminView ? (
           <AdminView onBackToApp={() => setIsAdminView(false)} />
+        ) : isStandaloneMode ? (
+          <StandaloneSensavourView onSwitchToStudyMode={() => handleToggleStandalone(false)} />
         ) : currentStage === 'welcome' ? (
           <WelcomeView
             onStartMission={handleStartMission}
